@@ -97,6 +97,7 @@ class sim:
             warpSize = device.get_attribute(cuda.device_attribute.WARP_SIZE)
             blocks = warpSize * warp
             device_count = cuda.Device.count()
+            
             print('Number of devices detected:', device_count)
             print('Device selected:', gpu_select)
             print('\tName:', device.name())
@@ -267,4 +268,4 @@ class sim:
         self.side = side
         self.count = count
         self.world = newState.flatten().astype(np.uint8)
-        self.stable = newstable.flatten().astype(np.uint32)
+        self.stable = newstable.flatten().astype(np.int32)
