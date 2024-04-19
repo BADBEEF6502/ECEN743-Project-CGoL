@@ -156,7 +156,7 @@ class sim:
 
                     /* Compute the result of the current state and stable factor for each cell. */
                     unsigned char prevState = world[cellLoc];
-                    unsigned char currState = (neighbors == 3) | (neighbors == 2 & prevState); /* Bitwise is faster. */
+                    unsigned char currState = (neighbors == 3) || (neighbors == 2 && prevState);
                     result[cellLoc] = currState;
    
                     /* Stability function evaluation.
@@ -164,15 +164,9 @@ class sim:
                             1. alive --> alive do min(stabilityScore + 1, MAX_VALUE)
                             2. dead  --> alive do MIN_VALUE
                             3. otherwise       do 0 */
-                    if(currState & prevState)
-                        if(stable[cellLoc] != {})
-                            stable[cellLoc]++;
-                        else
-                            continue;
-                    else if(currState & !prevState)
-                        stable[cellLoc] = {};
-                    else
-                        stable[cellLoc] = 0;
+                    unsigned char isMax = stable[cellLoc] == {};
+                    char val = stable[cellLoc];
+                    stable[cellLoc] = ((currState && prevState) * ((!isMax * (val + 1)) | (isMax * val))) | ((currState && !prevState) * {});
                 }}
             }}
             """.format(self.stableStabilityFactor, self.spawnStabilityFactor))
