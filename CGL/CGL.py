@@ -1,6 +1,7 @@
 # AUTH: Andy Cox V
-# DATE: 14 APR 2024
+# DATE: 19 APR 2024
 # LANG: Python 3.11.5
+# USAG: USE_GPU="TRUE/FALSE" python3 <script that uses CGL.py>
 # DESC: Conway Game of Life Engine with GPU support - https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
 # TODO: Currently only supports 1 CUDA capable GPU.
 
@@ -27,10 +28,25 @@
 
 import os
 import numpy as np
-import pycuda.driver as cuda
-import pycuda.tools
-import pycuda.autoinit
-from pycuda.compiler import SourceModule
+
+# Enviornmental variable whether to load PyCuda/GPU drivers or not.
+if 'USE_GPU' in os.environ:
+    GPU_CAPABLE = os.environ['USE_GPU'].lower()
+    if GPU_CAPABLE == 'true':
+        GPU_CAPABLE = True
+    elif GPU_CAPABLE == 'false':
+        GPU_CAPABLE = False
+    else:
+        raise TypeError('USE_GPU must either be "TRUE" or "FALSE"!')
+else:
+    GPU_CAPABLE = True
+
+# Sometimes you may have faulty drivers and need a bypass. This os var is boolean either true or false.
+if GPU_CAPABLE:
+    import pycuda.driver as cuda
+    import pycuda.tools
+    import pycuda.autoinit
+    from pycuda.compiler import SourceModule
 
 class sim:
     # Default to no state (1D or 2D numpy array for CGoL), side is the side length of the square, seed is used for random state generation, gpu chooses whether to use GPU or not, device selects the GPU device to use.
@@ -58,6 +74,8 @@ class sim:
             raise ValueError('warp must be positive integer!')
         if not isinstance(spawnStabilityFactor, int):
             raise TypeError('spawnStabilityFactor must be an integer!')
+        if GPU_CAPABLE != gpu:
+            raise TypeError(f'the os enviornment variable "USE_GPU" (defaults to true) is {GPU_CAPABLE} and "gpu" is {gpu}. Both must be equal in value!\nTo launch use: USE_GPU="true\\false" python3 <script.py>')
 
         # Update universal state variables.
         self.size = 0
