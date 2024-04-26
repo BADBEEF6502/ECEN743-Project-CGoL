@@ -96,7 +96,7 @@ sample = np.array([[0, 0, 0, 0, 0],
 window_height = window_length = 1000
 delay_time = 0 # Milliseconds.
 sim_side_size = 200
-cgl = CGL.sim(side=sim_side_size, seed=1230, gpu=True, spawnStabilityFactor=-20, stableStabilityFactor=20)
+cgl = CGL.sim(side=sim_side_size, seed=1230, gpu=False, spawnStabilityFactor=-20, stableStabilityFactor=20)
 #cgl.toggle_state([0,1,2,3,4,5])
 #cgl = CGL.sim(state=sample, gpu=True, spawnStabilityFactor=-2, stableStabilityFactor=2)
 #cgl.update_state(sample, sample.shape[0])
