@@ -249,14 +249,14 @@ class sim:
             self.__step_state_cpu()
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
-    def sum_stable(self, shallow=False):
+    def reward(self, shallow=False):
         result = np.add.reduce(self.stable, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
         if shallow:
             return result
         return np.copy(result)
     
     # Returns the count of alive cells in the system.
-    def sum_state(self, shallow=False):
+    def alive(self, shallow=False):
         result = np.add.reduce(self.world, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
         if shallow:
             return result
@@ -322,7 +322,7 @@ class sim:
         indx = np.array(indx)
         if np.all(indx < self.size) and np.all(indx >= 0):    # Check that each element (index) is less than the size of world and is non-negative.
             self.world[indx] = np.logical_not(self.world[indx])
-        elif indx == self.size + 1                            # This action does nothing, this is intended. size + 1 is the 
+        elif indx == self.size + 1:                           # This action does nothing, this is intended. size + 1 is the 
             pass
         else:
             raise ValueError(f'Not all indexes are valid!\nIndexes must be positive and less than the size of the state {self.size}.')
