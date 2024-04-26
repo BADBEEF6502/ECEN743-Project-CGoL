@@ -249,12 +249,18 @@ class sim:
             self.__step_state_cpu()
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
-    def sum_stable(self):
-        return np.add.reduce(self.stable, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
+    def sum_stable(self, shallow=False):
+        result = np.add.reduce(self.stable, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
+        if shallow:
+            return result
+        return np.copy(result)
     
     # Returns the count of alive cells in the system.
-    def sum_state(self):
-        return np.add.reduce(self.world, dtype=np.uint64)  # Faster than np.sum() as of 7 APR 2024.
+    def sum_state(self, shallow=False):
+        result = np.add.reduce(self.world, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
+        if shallow:
+            return result
+        return np.copy(result)
     
     # Will reset the enviornment to the original state.
     # When the CGL simulation is created, it already sets the seed for the system.
@@ -298,7 +304,7 @@ class sim:
         return 2 ** self.size
     
     # Get the action space, this is the dimnesion of all possible actions.
-    def get_aciton_space_dim(self):
+    def get_action_space_dim(self):
         return self.size + 1    # Plus 1 since an action we can take is "do nothing".
 
     # Expects a new state the same dimensions and side length of the original state. This is an alternative to toggling specific states on and off.
