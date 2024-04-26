@@ -67,8 +67,10 @@ if __name__ == "__main__":
     sim_side_size = 10
     env = CGL.sim(side=sim_side_size, seed=1230, gpu=False, spawnStabilityFactor=-20, stableStabilityFactor=20)
 
-    state_dim = env.get_state_space()
-    action_dim = env.get_action_space()
+    state_dim = env.get_state_space_dim()
+    action_dim = env.get_action_space_dim()
+
+    
 
     kwargs = {
         "state_dim":state_dim,
@@ -89,14 +91,24 @@ if __name__ == "__main__":
     moving_window = deque(maxlen=100)
     data = []
     start = time.perf_counter()
-    
+
     for e in range(args.n_episodes):
         env.reset()
         state = env.get_state(vector=True)
+        
         curr_reward = 0
         for t in range(args.max_esp_len):
-            action = learner.select_action(state,epsilon) #To be implemented
-            n_state,reward,terminated,truncated,_ = env.step(action)
+            action = learner.select_action(state,epsilon) 
+            
+            #env.togglestate(index of the cell i want to toggle)
+            env.step(action)
+            n_state     = env.get_state(vector=True)
+            reward      = env.get_reward()
+            
+            print(reward)
+            
+            
+            quit()
             done = terminated or truncated 
             learner.step(state,action,reward,n_state,done) #To be implemented
             state = n_state
