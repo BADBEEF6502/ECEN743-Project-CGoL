@@ -47,6 +47,8 @@ if GPU_CAPABLE:
     import pycuda.tools
     import pycuda.autoinit
     from pycuda.compiler import SourceModule
+else:
+    print('CGL is set to run in CPU mode.')
 
 class sim:
     # Default to no state (1D or 2D numpy array for CGoL), side is the side length of the square, seed is used for random state generation, gpu chooses whether to use GPU or not, device selects the GPU device to use.
@@ -119,6 +121,11 @@ class sim:
             blocks = warpSize * warp
             device_count = cuda.Device.count()
             
+            # Check that the GPU select option is valid.
+            if(gpu_select > device_count - 1):
+                gpu_list = range(device_count)
+                raise ValueError(f'gpu_select={gpu_select}, however the device which can be chosen are: {gpu_list}.')
+
             print('Number of devices detected:', device_count)
             print('Device selected:', gpu_select)
             print('\tName:', device.name())
@@ -289,7 +296,7 @@ class sim:
     # Return True of operation successful else False.
     def toggle_state(self, indx):
         indx = np.array(indx)
-        if np.all(indx < self.size) and np.all(indx > 0):    # Check that each element (index) is less than the size of world and greater than 0.
+        if np.all(indx < self.size) and np.all(indx >= 0):    # Check that each element (index) is less than the size of world and is non-negative.
             self.world[indx] = np.logical_not(self.world[indx])
         else:
             raise ValueError(f'Not all indexes are valid!\nIndexes must be positive and less than the size of the state {self.size}.')
