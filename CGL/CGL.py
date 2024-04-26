@@ -249,18 +249,12 @@ class sim:
             self.__step_state_cpu()
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
-    def reward(self, shallow=False):
-        result = np.add.reduce(self.stable, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
-        if shallow:
-            return result
-        return np.copy(result)
+    def reward(self):
+        return np.add.reduce(self.stable, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
     
     # Returns the count of alive cells in the system.
-    def alive(self, shallow=False):
-        result = np.add.reduce(self.world, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
-        if shallow:
-            return result
-        return np.copy(result)
+    def alive(self):
+        return np.add.reduce(self.world, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
     
     # Will reset the enviornment to the original state.
     # When the CGL simulation is created, it already sets the seed for the system.
@@ -319,10 +313,10 @@ class sim:
     # Each indx is a cell location as 1D vector.
     # Return True of operation successful else False.
     def toggle_state(self, indx):
-        indx = np.array(indx)
+        indx = np.array(indx)                                 # This is smart enough to determine if it is an array or one integer.
         if np.all(indx < self.size) and np.all(indx >= 0):    # Check that each element (index) is less than the size of world and is non-negative.
             self.world[indx] = np.logical_not(self.world[indx])
-        elif indx == self.size + 1:                           # This action does nothing, this is intended. size + 1 is the 
+        elif indx == self.size + 1:                           # This action does nothing, this is intended. The size + 1 is the "do nothing" operation output of the NN.
             pass
         else:
             raise ValueError(f'Not all indexes are valid!\nIndexes must be positive and less than the size of the state {self.size}.')
