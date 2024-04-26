@@ -49,7 +49,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-size", default=int(1e5),type=int)    # experience replay buffer length
     parser.add_argument("--update-freq", default=4, type=int)       # update frequency of target network
     parser.add_argument("--gpu-index", default=0,type=int)          # GPU index
-    parser.add_argument("--max-esp-len", default=1000, type=int)    # maximum time of an episode
+    parser.add_argument("--max-esp-len", default=500, type=int)    # maximum time of an episode
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1)               # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01)              # end value of epsilon
@@ -67,8 +67,8 @@ if __name__ == "__main__":
     sim_side_size = 10
     env = CGL.sim(side=sim_side_size, seed=1230, gpu=False, spawnStabilityFactor=-20, stableStabilityFactor=20)
 
-    state_dim = env.get_state_space_dim()
-    action_dim = env.get_action_space_dim()
+    state_dim = env.size
+    action_dim = env.size 
 
     
 
@@ -100,27 +100,29 @@ if __name__ == "__main__":
         for t in range(args.max_esp_len):
             action = learner.select_action(state,epsilon) 
             
-            #env.togglestate(index of the cell i want to toggle)
+            
+        
+            env.toggle_state(action)
+            
             env.step(action)
             n_state     = env.get_state(vector=True)
-            reward      = env.get_reward()
+            reward      = env.reward()
             
-            print(reward)
+            #print(reward)
             
+            learner.step(state,action,reward,n_state) #To be implemented
             
-            quit()
-            done = terminated or truncated 
-            learner.step(state,action,reward,n_state,done) #To be implemented
             state = n_state
             curr_reward += reward
-            if done:
-                break
+            
         moving_window.append(curr_reward)
         epsilon = epsilon*epsilon_decay
+        if e % 10 == 0:
+            print('Episode Number {} Average Episodic Reward (over 100 episodes): {:.2f}'.format(e, np.mean(moving_window)))
+           
 
         data.append((e,np.mean(moving_window)))
-    
-    
+
     quit()
     #Visualization tool
     render(env, delay=delay_time, dim=(window_height, window_length), showAge=True)

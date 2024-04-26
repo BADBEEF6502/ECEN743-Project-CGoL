@@ -23,17 +23,17 @@ class ExperienceReplay:
         self.action = np.zeros((max_size, action_dim))
         self.next_state = np.zeros((max_size, state_dim))
         self.reward = np.zeros((max_size, 1))
-        self.done = np.zeros((max_size, 1))     
+            
         self.batch_size = batch_size
         self.device = torch.device('cuda', index=gpu_index) if torch.cuda.is_available() else torch.device('cpu')
 
 
-    def add(self, state, action,reward,next_state, done):
+    def add(self, state, action,reward,next_state):
         self.state[self.ptr] = state
         self.action[self.ptr] = action
         self.next_state[self.ptr] = next_state
         self.reward[self.ptr] = reward
-        self.done[self.ptr] = done
+        
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
@@ -45,7 +45,7 @@ class ExperienceReplay:
             torch.FloatTensor(self.action[ind]).long().to(self.device),
             torch.FloatTensor(self.reward[ind]).to(self.device),
             torch.FloatTensor(self.next_state[ind]).to(self.device),
-            torch.FloatTensor(self.done[ind]).to(self.device)
+        
         )
 
 
@@ -116,13 +116,13 @@ class DQNAgent():
         
         self.t_train = 0
     
-    def step(self, state, action, reward, next_state, done):
+    def step(self, state, action, reward, next_state):
         """
         1. Adds (s,a,r,s') to the experience replay buffer, and updates the networks
         2. Learns when the experience replay buffer has enough samples
         3. Updates target netowork
         """
-        self.memory.add(state, action, reward, next_state, done)       
+        self.memory.add(state, action, reward, next_state)       
         self.t_train += 1 
                     
         if self.memory.size > self.batch_size:
@@ -209,7 +209,7 @@ class DQNAgent():
         Return: None
         """         
         #this is the experience relay section
-        states, actions, rewards, next_states, dones = experiences
+        states, actions, rewards, next_states = experiences
 
         ###### TYPE YOUR CODE HERE ######
         #################################
