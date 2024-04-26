@@ -61,9 +61,9 @@ class QNetwork(nn.Module):
             action_dim (int): action dimenssion
         """
         super(QNetwork, self).__init__()
-        self.l1 = nn.Linear(state_dim, 64)
-        self.l2 = nn.Linear(64, 64)
-        self.l3 = nn.Linear(64, action_dim)
+        self.l1 = nn.Linear(state_dim, 128)
+        self.l2 = nn.Linear(128, 128)
+        self.l3 = nn.Linear(128, action_dim)
         
     def forward(self, state):
         q = F.relu(self.l1(state))

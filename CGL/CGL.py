@@ -274,11 +274,17 @@ class sim:
     
     # Returns the size of the state.
     def get_size(self):
-        return self.size
+        return self.siz
+    
+    def get_state_space(self):
+        return self.get_size()
     
     # Returns the iteration/count the simulation is on. 
     def get_count(self):
         return self.count
+    
+    def get_action_space(self):
+        return self.size + 1
     
     # Returns the seed used in the simulation.
     def get_seed(self):

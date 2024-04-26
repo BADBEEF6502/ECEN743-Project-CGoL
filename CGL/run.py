@@ -2,6 +2,11 @@ import pygame
 import CGL
 import numpy as np
 import time
+import argparse
+from dqn import *
+
+#import matplotlib
+#import matplotlib.pyplot as plt
 
 pygame.init()
 
@@ -20,31 +25,6 @@ def render(cgl, delay, dim, color=0xFF, showAge=False):
         if showAge == False:
             image[image != 0] = color
 
-        #image = image.T.flatten() # Need to transpose image for it to appear properly and flatten for later computations.
-        # Commented out -- used to be for int32!
-        #if not showAge: # Monochrome just show alive or dead cells, still need to update for new colors.
-        #    image = np.where(image, color, 0)
-        #    image = image.reshape(side, side)
-        #else:
-        #    image[image == 0] = background
-        #    image
-            #image = np.where(image, 0, 0x00FFFFFF) # Low numbers are dark and background is black, inverse so colors show.
-        #    image[image == 0] = background
-            # Convert 2D matrix of int32 to RGB (R,G,B) tuple for pygame.
-            # Traditionally RGB, but formula swapped since Blue always changes.
-        #    top = (image >> 16) & 255   # Red  (counts slowest)
-        #    mid = (image >> 8) & 255    # Green
-        #    base = image & 255          # Blue (counts fastest)
-        #else:
-        #    image = np.where(image, ~image, 0) # Low numbers are dark and background is black, inverse so colors show.
-        #    # Convert 2D matrix of int32 to RGB (R,G,B) tuple for pygame.
-        #    # Traditionally RGB, but formula swapped since Blue always changes.
-        #    top = (image >> 16) & 255   # Red  (counts slowest)
-        #    mid = (image >> 8) & 255    # Green
-        #    base = image & 255          # Blue (counts fastest)
-
-        #    image = np.stack((top, mid, base), axis=-1).astype(np.uint8).reshape(side, side, 3) # Need to reshape for RGB values.
-
         surf = pygame.pixelcopy.make_surface(image)
         surf = pygame.transform.scale(surf, dim)
         pygame.display.set_caption(f"Seed={cgl.get_seed():,} Iteration={cgl.get_count():,} Stability={cgl.sum_stable():,} Alive={cgl.sum_state():,}")
@@ -56,55 +36,75 @@ def render(cgl, delay, dim, color=0xFF, showAge=False):
 
     pygame.quit()
 
-# 20x20 sample with one oscillator and 1 cell in upper left corner.
 
-"""
-sample = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
-"""
+if __name__ == "__main__":
+    # HyperParameters For DQN
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", default="LunarLander-v2")          # Gymnasium environment name
+    parser.add_argument("--seed", default=0, type=int)              # sets Gym, PyTorch and Numpy seeds
+    parser.add_argument("--n-episodes", default=2000, type=int)     # maximum number of training episodes
+    parser.add_argument("--batch-size", default=64, type=int)       # training batch size
+    parser.add_argument("--discount", default=0.99)                 # discount factor
+    parser.add_argument("--lr", default=5e-4)                       # learning rate
+    parser.add_argument("--tau", default=0.001)                     # soft update of target network
+    parser.add_argument("--max-size", default=int(1e5),type=int)    # experience replay buffer length
+    parser.add_argument("--update-freq", default=4, type=int)       # update frequency of target network
+    parser.add_argument("--gpu-index", default=0,type=int)          # GPU index
+    parser.add_argument("--max-esp-len", default=1000, type=int)    # maximum time of an episode
+    #exploration strategy
+    parser.add_argument("--epsilon-start", default=1)               # start value of epsilon
+    parser.add_argument("--epsilon-end", default=0.01)              # end value of epsilon
+    parser.add_argument("--epsilon-decay", default=0.9965)#.995           # decay value of epsilon
+    args = parser.parse_args()
+    
+    
+
+    
+    
 
 
-sample = np.array([[0, 0, 0, 0, 0],
-                  [0, 0, 0, 0, 0],
-                  [0, 1, 1, 1, 0],
-                  [0, 0, 0, 0, 0],
-                  [0, 0, 0, 0, 0]])
+    window_height = window_length = 500
+    delay_time = 0 # Milliseconds.
+    sim_side_size = 10
+    env = CGL.sim(side=sim_side_size, seed=1230, gpu=False, spawnStabilityFactor=-20, stableStabilityFactor=20)
 
-window_height = window_length = 1000
-delay_time = 0 # Milliseconds.
-sim_side_size = 200
-cgl = CGL.sim(side=sim_side_size, seed=1230, gpu=False, spawnStabilityFactor=-20, stableStabilityFactor=20)
-#cgl.toggle_state([0,1,2,3,4,5])
-#cgl = CGL.sim(state=sample, gpu=True, spawnStabilityFactor=-2, stableStabilityFactor=2)
-#cgl.update_state(sample, sample.shape[0])
-start = time.perf_counter()
-render(cgl, delay=delay_time, dim=(window_height, window_length), showAge=True)
-#for _ in range(1000000):
-#    print(cgl.get_stable(), '\n')
-#    print(cgl.get_state(), '\n')
-#    cgl.step()
-#    time.sleep(1)
-print('Runtime=', time.perf_counter()-start)
+    state_dim = env.get_state_space()
+    action_dim = env.get_action_space()
+
+    kwargs = {
+        "state_dim":state_dim,
+        "action_dim":action_dim,
+        "discount":args.discount,
+        "tau":args.tau,
+        "lr":args.lr,
+        "update_freq":args.update_freq,
+        "max_size":args.max_size,
+        "batch_size":args.batch_size,
+        "gpu_index":args.gpu_index
+    }
+
+
+    learner = DQNAgent(**kwargs)
+    epsilon = args.epsilon_start 
+    
+   
+    start = time.perf_counter()
+    for e in range(args.n_episodes):
+        print(e)
+        state, _ = env.reset(seed=args.seed)
+        curr_reward = 0
+        for t in range(args.max_esp_len):
+            action = learner.select_action(state,epsilon) #To be implemented
+            n_state,reward,terminated,truncated,_ = env.step(action)
+            done = terminated or truncated 
+            learner.step(state,action,reward,n_state,done) #To be implemented
+            state = n_state
+            curr_reward += reward
+            if done:
+                break
+        moving_window.append(curr_reward)
+    #Visualization tool
+    #render(env, delay=delay_time, dim=(window_height, window_length), showAge=True)
+
+
+    print('Runtime=', time.perf_counter()-start)
