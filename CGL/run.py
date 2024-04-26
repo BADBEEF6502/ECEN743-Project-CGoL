@@ -47,7 +47,7 @@ def render(cgl, delay, dim, color=0xFF, showAge=False):
 
         surf = pygame.pixelcopy.make_surface(image)
         surf = pygame.transform.scale(surf, dim)
-        pygame.display.set_caption(f"Seed={cgl.get_seed():,} Iteration={cgl.get_count():,} Stability={cgl.sum_stable():,} Alive={cgl.sum_state():,}")
+        pygame.display.set_caption(f"Seed={cgl.get_seed():,} Iteration={cgl.get_count():,} Stability={cgl.reward():,} Alive={cgl.alive():,}")
         display.blit(surf, (0, 0))
         pygame.display.update()
         #print(cgl.get_stable(), '\n')
@@ -96,15 +96,16 @@ sample = np.array([[0, 0, 0, 0, 0],
 window_height = window_length = 1000
 delay_time = 0 # Milliseconds.
 sim_side_size = 200
-cgl = CGL.sim(side=sim_side_size, seed=1230, gpu=False, spawnStabilityFactor=-20, stableStabilityFactor=20)
+cgl = CGL.sim(side=sim_side_size, seed=1230, gpu=True, spawnStabilityFactor=-20, stableStabilityFactor=20)
 #cgl.toggle_state([0,1,2,3,4,5])
 #cgl = CGL.sim(state=sample, gpu=True, spawnStabilityFactor=-2, stableStabilityFactor=2)
 #cgl.update_state(sample, sample.shape[0])
 start = time.perf_counter()
-render(cgl, delay=delay_time, dim=(window_height, window_length), showAge=True)
-#for _ in range(1000000):
-#    print(cgl.get_stable(), '\n')
-#    print(cgl.get_state(), '\n')
-#    cgl.step()
-#    time.sleep(1)
+#render(cgl, delay=delay_time, dim=(window_height, window_length), showAge=True)
+RUN_ITERS = 1000
+for _ in range(RUN_ITERS):
+    cgl.reset()
+    print(cgl.get_stable(),'\n')
+    cgl.step()
+    time.sleep(1)
 print('Runtime=', time.perf_counter()-start)

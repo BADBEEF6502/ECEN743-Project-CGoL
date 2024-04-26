@@ -39,8 +39,8 @@ if args.blink == False:     # Run standard.
     for _ in range(args.iters):
         cgl.step()
     elapsed = time.perf_counter() - start
-    stable = cgl.sum_stable()
-    state = cgl.sum_state()
+    stable = cgl.reward()
+    state = cgl.alive()
 else:   # Simple blinker sanity check.
     cgl = CGL.sim(state=blinker, gpu=(not args.cpu), gpu_select=args.device, spawnStabilityFactor=-128, stableStabilityFactor=127)
     for _ in range(256):
@@ -48,8 +48,8 @@ else:   # Simple blinker sanity check.
         print(cgl.get_stable(),'\n')
         cgl.step()
     elapsed = time.perf_counter() - start
-    stable = cgl.sum_stable()
-    state = cgl.sum_state()
+    stable = cgl.reward()
+    state = cgl.alive()
 
 # Print results.
 print('CGL Benchmark Results')

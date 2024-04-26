@@ -322,6 +322,8 @@ class sim:
         indx = np.array(indx)
         if np.all(indx < self.size) and np.all(indx >= 0):    # Check that each element (index) is less than the size of world and is non-negative.
             self.world[indx] = np.logical_not(self.world[indx])
+        elif indx == self.size + 1                            # This action does nothing, this is intended. size + 1 is the 
+            pass
         else:
             raise ValueError(f'Not all indexes are valid!\nIndexes must be positive and less than the size of the state {self.size}.')
 
