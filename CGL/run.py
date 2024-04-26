@@ -1,12 +1,11 @@
-import pygame
-import CGL
+import pygame, time, argparse, matplotlib
 import numpy as np
-import time
-import argparse
-from dqn import *
+from collections import deque
+import matplotlib.pyplot as plt
 
-#import matplotlib
-#import matplotlib.pyplot as plt
+import CGL
+from dqn import DQNAgent
+
 
 pygame.init()
 
@@ -86,12 +85,14 @@ if __name__ == "__main__":
 
     learner = DQNAgent(**kwargs)
     epsilon = args.epsilon_start 
-    
-   
+    epsilon_decay = args.epsilon_decay
+    moving_window = deque(maxlen=100)
+    data = []
     start = time.perf_counter()
+    
     for e in range(args.n_episodes):
-        print(e)
-        state, _ = env.reset(seed=args.seed)
+        env.reset()
+        state = env.get_state(vector=True)
         curr_reward = 0
         for t in range(args.max_esp_len):
             action = learner.select_action(state,epsilon) #To be implemented
@@ -103,8 +104,27 @@ if __name__ == "__main__":
             if done:
                 break
         moving_window.append(curr_reward)
+        epsilon = epsilon*epsilon_decay
+
+        data.append((e,np.mean(moving_window)))
+    
+    
+    quit()
     #Visualization tool
-    #render(env, delay=delay_time, dim=(window_height, window_length), showAge=True)
+    render(env, delay=delay_time, dim=(window_height, window_length), showAge=True)
 
+    episodes = []
+    rewards = []
+    
+    if isinstance(data[0], tuple):
+        # Extracting data from list of tuples
+        episodes, rewards = zip(*data)
 
+    plt.plot(episodes, rewards, marker='o')
+    plt.xlabel('Episode Number')
+    plt.ylabel('Episodic Reward')
+    plt.title('Episodic Rewards over Episodes')
+    plt.grid(True)
+    plt.show()
+    
     print('Runtime=', time.perf_counter()-start)
