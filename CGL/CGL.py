@@ -97,15 +97,18 @@ class sim:
 
             self.side = int(np.sqrt(self.size))             # Side length of square enviornment.
             self.world = np.copy(state)
+            self.initState = np.copy(state)                 # Used when reset() is called.
         else:
             np.random.seed(seed)                            # Set constant seed for random environemnts (useful for debugging).
             self.side = side
             self.size = side ** 2
             self.world = np.random.randint(2, size=self.size, dtype=np.uint8)
+            self.initState = np.copy(self.world)            # Used when reset() is called.
 
         self.temp = np.empty_like(self.world)                       # Used here incase of forceCPU=True.
-        self.stable = np.zeros(self.size, dtype=np.int8)           # Used to store stable values for each cell, NOTE: IS SIGNED!
+        self.stable = np.zeros(self.size, dtype=np.int8)            # Used to store stable values for each cell, NOTE: IS SIGNED!
         self.stable[self.world != 0] = self.spawnStabilityFactor    # Every cell starts at the spawnStabilityFactor.
+        self.initStable = np.copy(self.stable)              # Needed when reset() is called.
 
         # Setup CPU and GPU memory components here for speed.
         if gpu:
@@ -252,6 +255,12 @@ class sim:
     # Returns the count of alive cells in the system.
     def sum_state(self):
         return np.add.reduce(self.world, dtype=np.uint64)  # Faster than np.sum() as of 7 APR 2024.
+    
+    # Will reset the enviornment to the original state.
+    # When the CGL simulation is created, it already sets the seed for the system.
+    def reset(self):
+        self.world = np.copy(self.initState)
+        self.stable = np.copy(self.initStable)
 
 # --- I/O ---
     # Will either return a vector OR a 2D square matrix of the system. NEED TO DO DEEP COPY!
@@ -267,7 +276,7 @@ class sim:
         if shallow:
             return out
         return np.copy(out)
-    
+
     # Returns the side length of the state.
     def get_side(self):
         return self.side
@@ -283,6 +292,14 @@ class sim:
     # Returns the seed used in the simulation.
     def get_seed(self):
         return self.seed
+    
+    # Get the state space, this is all the possible states for each cell.
+    def get_state_space_dim(self):
+        return 2 ** self.size
+    
+    # Get the action space, this is the dimnesion of all possible actions.
+    def get_aciton_space_dim(self):
+        return self.size + 1    # Plus 1 since an action we can take is "do nothing".
 
     # Expects a new state the same dimensions and side length of the original state. This is an alternative to toggling specific states on and off.
     def update_state(self, newState, side):
@@ -309,7 +326,6 @@ class sim:
 
     # Load from memory an exact state setup.
     def load(self, newState, newstable, side, count, spawnStabilityFactor, stableStabilityFactor):
-
         if not isinstance(newState, np.ndarray) or not isinstance(newstable, np.ndarray):
             raise TypeError('newState and newstable variables must be a Numpy ndarray!')
         if not isinstance(side, int) or not isinstance(count, int):
