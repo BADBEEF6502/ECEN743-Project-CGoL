@@ -47,8 +47,6 @@ if GPU_CAPABLE:
     import pycuda.tools
     import pycuda.autoinit
     from pycuda.compiler import SourceModule
-else:
-    print('CGL is set to run in CPU mode.')
 
 class sim:
     # Default to no state (1D or 2D numpy array for CGoL), side is the side length of the square, seed is used for random state generation, gpu chooses whether to use GPU or not, device selects the GPU device to use.
@@ -189,6 +187,9 @@ class sim:
             # Get block and grid size given the selected device.
             self.blockSize = blocks if maxThreadPerBlock > blocks else maxThreadPerBlock
             self.gridSize = (self.size + self.blockSize - 1) // self.blockSize
+        else:
+            print('CGL is set to run in CPU mode.')
+        print('CGL is now running...')
 
 # --- CONTROL ---
 # These are private functions that should not be mixed or used outside of this class.
