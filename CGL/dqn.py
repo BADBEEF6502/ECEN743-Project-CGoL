@@ -15,7 +15,7 @@ class ExperienceReplay:
         self.ptr = 0
         self.size = 0
         self.state = torch.zeros((max_size, state_dim), dtype=torch.int8).to(self.device)       # State is stability factor matrix of the system.
-        self.action = torch.zeros((max_size, action_dim), dtype=torch.int32).to(self.device)    # Action is the index of the cell to modify.
+        self.action = torch.zeros((max_size, action_dim), dtype=torch.uint8).to(self.device)    # Action is the index of the cell to modify.
         self.next_state = torch.zeros((max_size, state_dim), dtype=torch.int8).to(self.device)  # Next state is next stability factor matrix of the system.
         self.reward = torch.zeros((max_size, 1), dtype=torch.int32).to(self.device)             # The returned rewards or the total stability factor of the system.
         self.batch_size = batch_size
