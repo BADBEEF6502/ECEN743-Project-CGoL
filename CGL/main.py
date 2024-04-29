@@ -43,6 +43,7 @@ if __name__ == "__main__":
         "max_size":     args.exp_size,
         "batch_size":   args.batch_size,
         "gpu_index":    args.gpu_index,
+        "seed":         args.seed
     }
 
     # Code to begin teaching the agent.

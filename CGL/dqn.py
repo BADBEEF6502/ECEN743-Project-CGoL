@@ -72,6 +72,7 @@ class DQNAgent():
      max_size=int(1e5),
      batch_size=64,
      gpu_index=0,
+     seed=0
      ):
         """
             state_size (int): dimension of each state
@@ -92,6 +93,7 @@ class DQNAgent():
         self.lr = lr
         self.update_freq = update_freq
         self.batch_size = batch_size
+        np.random.seed(seed)
         self.device = torch.device('cuda', index=gpu_index) if torch.cuda.is_available() else torch.device('cpu')
 
         # Setting up the NNs
