@@ -85,6 +85,7 @@ class DQNAgent():
             max_size (int): experience replay buffer size
             batch_size (int): training batch size
             gpu_index (int): GPU used for training
+            seed (int): init some random seed for agent.
         """
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -152,16 +153,15 @@ class DQNAgent():
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-
-        # Target update here?
+        self.target_update(self.Q, self.Q_target, self.tau)
         
     # Update the target network.
     def target_update(self, Q, Q_target, tau):
         """
-        TODO: Update the target network parameters (param_target) using current Q parameters (param_Q)
+        Update the target network parameters (param_target) using current Q parameters (param_Q)
         Perform the update using tau, this ensures that we do not change the target network drastically
         1. param_target = tau * param_Q + (1 - tau) * param_target
-        Input: Q,Q_target,tau
+        Input: Q, Q_target, tau
         Return: None
         """ 
         Q_target_state_dict = Q_target.state_dict()

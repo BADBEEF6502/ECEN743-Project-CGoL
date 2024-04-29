@@ -19,7 +19,7 @@ if __name__ == "__main__":
     parser.add_argument("--exp-gpu", action='store_true')           # experience replay buffer length
     parser.add_argument("--update-freq", default=4, type=int)       # update frequency of target network
     parser.add_argument("--gpu-index", default=0,type=int)          # GPU index
-    parser.add_argument("--max-esp-len", default=100, type=int)     # maximum time of an episode
+    parser.add_argument("--max-esp-len", default=1000, type=int)    # maximum time of an episode
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1)               # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01)              # end value of epsilon
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         state = env.get_stable(vector=True, shallow=True)
         
         curr_reward = 0
-        for t in range(args.max_esp_len):   # Run for maximum length of 1 episode.
+        for _ in range(args.max_esp_len):   # Run for maximum length of 1 episode.
             action = learner.select_action(state, epsilon) 
             
             env.toggle_state(action)    # Commit action.
@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
             # Collect the reward and state and teach the DQN to learn.
             n_state = env.get_stable(vector=True, shallow=True)
-            reward = env.reward()            
+            reward = env.reward()
             learner.step(state, action, reward, n_state)
             
             state = n_state
@@ -82,7 +82,5 @@ if __name__ == "__main__":
     
     # Final prints.
     print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}')    # Final printout of of episode, mean reward, and time duration.
-    print('State\n', env.get_state())
-    print('Stability\n', env.get_stable())
     learner.save(f'{args.side}')  # Save the final state of the learner.
 quit()
