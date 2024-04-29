@@ -47,6 +47,8 @@ if GPU_CAPABLE:
     import pycuda.tools
     import pycuda.autoinit
     from pycuda.compiler import SourceModule
+    import pycuda.autoprimaryctx # Added from Nhan autoinit
+    import pycuda.autoinit       # Added from Nhan
 
 class sim:
     # Default to no state (1D or 2D numpy array for CGoL), side is the side length of the square, seed is used for random state generation, gpu chooses whether to use GPU or not, device selects the GPU device to use.
@@ -108,7 +110,7 @@ class sim:
         self.temp = np.empty_like(self.world)                       # Used here incase of forceCPU=True.
         self.stable = np.zeros(self.size, dtype=np.int8)            # Used to store stable values for each cell, NOTE: IS SIGNED!
         self.stable[self.world != 0] = self.spawnStabilityFactor    # Every cell starts at the spawnStabilityFactor.
-        self.initStable = np.copy(self.stable)              # Needed when reset() is called.
+        self.initStable = np.copy(self.stable)                      # Needed when reset() is called.
 
         # Setup CPU and GPU memory components here for speed.
         if gpu:
@@ -173,8 +175,8 @@ class sim:
                             2. dead  --> alive do MIN_VALUE
                             3. otherwise       do 0 */
                     unsigned char isMax = stable[cellLoc] == {};
-                    char val = stable[cellLoc];
-                    stable[cellLoc] = ((currState && prevState) * ((!isMax * (val + 1)) | (isMax * val))) | ((currState && !prevState) * {});
+                    char stabilityValue = stable[cellLoc];
+                    stable[cellLoc] = ((currState && prevState) * ((!isMax * (stabilityValue + 1)) | (isMax * stabilityValue))) | ((currState && !prevState) * {});
                 }}
             }}
             """.format(self.stableStabilityFactor, self.spawnStabilityFactor))
@@ -190,6 +192,7 @@ class sim:
             # Get block and grid size given the selected device.
             self.blockSize = blocks if maxThreadPerBlock > blocks else maxThreadPerBlock
             self.gridSize = (self.size + self.blockSize - 1) // self.blockSize
+            self.cglStream = cuda.Stream()
         else:
             print('CGL is set to run in CPU mode.')
         print('CGL is now running...')
@@ -200,7 +203,7 @@ class sim:
     def __step_state_gpu(self):
         cuda.memcpy_htod(self.world_gpu, np.ascontiguousarray(self.world)) # Copy world into GPU.
         cuda.memcpy_htod(self.stable_gpu, np.ascontiguousarray(self.stable)) # Copy stability values into GPU.
-        self.run_gpu(self.world_gpu, self.result_gpu, self.stable_gpu, np.uint32(self.side), np.uint32(self.size), block=(self.blockSize, 1, 1), grid=(self.gridSize, 1))  # Launch the kernel.
+        self.run_gpu(self.world_gpu, self.result_gpu, self.stable_gpu, np.uint32(self.side), np.uint32(self.size), block=(self.blockSize, 1, 1), grid=(self.gridSize, 1), stream=self.cglStream)  # Launch the kernel.
         cuda.memcpy_dtoh(self.world, self.result_gpu) # Copy the resulting world back to the host.
         cuda.memcpy_dtoh(self.stable, self.stable_gpu) # Copy the new stable values back to the host.
 
@@ -250,17 +253,21 @@ class sim:
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
     def reward(self):
-        return np.add.reduce(self.stable, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
+        return np.add.reduce(self.stable, dtype=np.int32) # Faster than np.sum() as of 7 APR 2024.
     
     # Returns the count of alive cells in the system.
     def alive(self):
-        return np.add.reduce(self.world, dtype=np.int64) # Faster than np.sum() as of 7 APR 2024.
+        return np.add.reduce(self.world, dtype=np.uint32) # Faster than np.sum() as of 7 APR 2024.
     
     # Will reset the enviornment to the original state.
     # When the CGL simulation is created, it already sets the seed for the system.
     def reset(self):
         self.world = np.copy(self.initState)
         self.stable = np.copy(self.initStable)
+
+    # This will compare some input world state with the current state and return true if they match.
+    def match(self, terminalState):
+        return (self.world==terminalState.flatten()).all()
 
 # --- I/O ---
     # Will either return a vector OR a 2D square matrix of the system. NEED TO DO DEEP COPY!
@@ -281,10 +288,6 @@ class sim:
     def get_side(self):
         return self.side
     
-    # Returns the size of the state.
-    def get_size(self):
-        return self.size
-    
     # Returns the iteration/count the simulation is on. 
     def get_count(self):
         return self.count
@@ -293,6 +296,10 @@ class sim:
     def get_seed(self):
         return self.seed
     
+    # Returns the size of the state.
+    def get_state_dim(self):
+        return self.size
+
     # Get the state space, this is all the possible states for each cell.
     def get_state_space_dim(self):
         return 2 ** self.size
@@ -313,10 +320,11 @@ class sim:
     # Each indx is a cell location as 1D vector.
     # Return True of operation successful else False.
     def toggle_state(self, indx):
-        indx = np.array(indx)                                 # This is smart enough to determine if it is an array or one integer.
-        if np.all(indx < self.size) and np.all(indx >= 0):    # Check that each element (index) is less than the size of world and is non-negative.
-            self.world[indx] = np.logical_not(self.world[indx])
-        elif indx == self.size + 1:                           # This action does nothing, this is intended. The size + 1 is the "do nothing" operation output of the NN.
+        indx = np.array(indx)                                   # This is smart enough to determine if it is an array or one integer.
+        if np.all(indx < self.size) and np.all(indx >= 0):      # Check that each element (index) is less than the size of world and is non-negative.
+            self.world[indx] = np.logical_not(self.world[indx]) # Toggle the respective cell.
+            self.stable[indx] = self.spawnStabilityFactor       # Update the stability matrix with new cells.
+        elif indx == self.size:                                 # This action does nothing, this is intended. The size + 1 is the "do nothing" operation output of the NN.
             pass
         else:
             raise ValueError(f'Not all indexes are valid!\nIndexes must be positive and less than the size of the state {self.size}.')
