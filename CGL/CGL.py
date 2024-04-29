@@ -322,11 +322,9 @@ class sim:
     def toggle_state(self, indx):
         indx = np.array(indx)                                   # This is smart enough to determine if it is an array or one integer.
         if np.all(indx < self.size) and np.all(indx >= 0):      # Check that each element (index) is less than the size of world and is non-negative.
-            self.world[indx] = np.logical_not(self.world[indx]) # Toggle the respective cell.
+            self.world[indx] = np.logical_not(self.world[indx]) # Toggle the respective cells.
             self.stable[indx] = self.spawnStabilityFactor       # Update the stability matrix with new cells.
-        elif indx == self.size:                                 # This action does nothing, this is intended. The size + 1 is the "do nothing" operation output of the NN.
-            pass
-        else:
+        elif indx != self.size:                                 # This action does nothing, this is intended. The size + 1 is the "do nothing" operation output of the NN.
             raise ValueError(f'Not all indexes are valid!\nIndexes must be positive and less than the size of the state {self.size}.')
 
     # Store all of the attributes of the current system.
