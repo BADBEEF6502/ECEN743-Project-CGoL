@@ -42,7 +42,7 @@ if __name__ == "__main__":
         "lr":args.lr,
         "gpu_index":args.gpu_index,
         "seed":args.seed,
-        "arg_sim":args
+        "arg_sim":args ###Added to include args for CGL within PGagent
     }
     learner = PGAgent(**kwargs) # Creating the PG learning agent
 
