@@ -40,7 +40,7 @@ class value_network(nn.Module):
             state_dim (int): state dimenssion
         '''
         super(value_network, self).__init__()
-        self.l1 = nn.Linear(state_dim, action_dim*2)
+        self.l1 = nn.Linear(state_dim, action_dim*2)###Note: Lines 43-45 adjusted to include action_dim*2, not sure if done properly
         self.l2 = nn.Linear(action_dim*2, action_dim*2)
         self.l3 = nn.Linear(action_dim*2, 1)
 
@@ -68,7 +68,7 @@ class policy_network(nn.Module):
         super(policy_network, self).__init__()
         self.state_dim = state_dim
         self.action_dim = action_dim
-        self.l1 = nn.Linear(action_dim-1,action_dim*2)#(state_dim,action_dim*2)
+        self.l1 = nn.Linear(action_dim-1,action_dim*2)#(state_dim,action_dim*2)###Note: Line 71-74 adjusted to include action_dim*2, and action_dim-1 not sure if done properly
         self.l2 = nn.Linear(action_dim*2,action_dim*2)
         self.mean = nn.Linear(action_dim*2,action_dim)
         self.log_std = nn.Parameter(torch.ones(1, action_dim) * log_std)
@@ -192,14 +192,14 @@ class PGAgent():
         else:
             self.policy.to("cpu") #Move network to CPU for sampling
             #env = gym.make(args.env,continuous=True)
-            env=CGL.sim(side=self.arg_sim.side, seed=self.arg_sim.seed, gpu=True, gpu_select=self.arg_sim.gpu_index, spawnStabilityFactor=-2, stableStabilityFactor=2)
+            env=CGL.sim(side=self.arg_sim.side, seed=self.arg_sim.seed, gpu=True, gpu_select=self.arg_sim.gpu_index, spawnStabilityFactor=-2, stableStabilityFactor=2)###CGL added
             states = []
             actions = []
             rewards = []
             n_dones = []
             curr_reward_list = []
             while len(states) < batch_size:
-                env.reset()
+                env.reset()###Note: Line 202-203 adjusted to reset states with CGL
                 state = env.get_stable(vector=True, shallow=True)     
                 curr_reward = 0
                 for t in range(1000):
@@ -209,10 +209,10 @@ class PGAgent():
                             action = self.policy(state_ten)[0][0].numpy() # Take mean action during evaluation
                         else:
                             action = self.policy.select_action(state_ten)[0].numpy() # Sample from distribution during training
-                    action = action.argmax().cpu()#.astype(np.float64)
+                    action = action.argmax().cpu()#.astype(np.float64) ###Not sure how to handle action here because it is a array of values, so I just pick the argmax.
                     
                     #n_state,reward,terminated,truncated,_ = env.step(action) # Execute action in the environment
-                    ###
+                    ### Lines 216-221 added for step. 
                     env.toggle_state(action)    # Commit action.
                     env.step()                  # Update the simulator's state.
 
@@ -548,7 +548,7 @@ class PGAgent():
             
             
             
-'''
+''' ###Section commented out in favor of moving it to main file.
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", default="LunarLander-v2")           # Gymnasium environment name
