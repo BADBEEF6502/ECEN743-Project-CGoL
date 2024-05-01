@@ -43,15 +43,16 @@ class QNetwork(nn.Module):
     """
     Q Network: designed to take state as input and give out Q values of actions as output
     """
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, state_dim, action_dim, net_mul):
         """
             state_dim (int): state dimenssion
             action_dim (int): action dimenssion
         """
         super(QNetwork, self).__init__()
-        self.l1 = nn.Linear(state_dim, action_dim*2)
-        self.l2 = nn.Linear(action_dim*2, action_dim*2)
-        self.l3 = nn.Linear(action_dim*2, action_dim)
+        hidden = int(action_dim * net_mul)
+        self.l1 = nn.Linear(state_dim, hidden)
+        self.l2 = nn.Linear(hidden, hidden)
+        self.l3 = nn.Linear(hidden, action_dim)
         
     def forward(self, state):
         state = state.to(torch.float32)     # OPTIMIZATION: Can change this to float16, but may cause issues and need to adjust network too.
@@ -72,7 +73,8 @@ class DQNAgent():
      max_size=int(1e5),
      batch_size=64,
      gpu_index=0,
-     seed=0
+     seed=0,
+     net_mul=2
      ):
         """
             state_size (int): dimension of each state
@@ -86,6 +88,7 @@ class DQNAgent():
             batch_size (int): training batch size
             gpu_index (int): GPU used for training
             seed (int): init some random seed for agent.
+            net_mul (int): init neural network hidden layer multiplier
         """
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -98,8 +101,8 @@ class DQNAgent():
         self.device = torch.device('cuda', index=gpu_index) if torch.cuda.is_available() else torch.device('cpu')
 
         # Setting up the NNs
-        self.Q = QNetwork(state_dim, action_dim).to(self.device)
-        self.Q_target = QNetwork(state_dim, action_dim).to(self.device)
+        self.Q         = QNetwork(state_dim, action_dim, net_mul).to(self.device)
+        self.Q_target  = QNetwork(state_dim, action_dim, net_mul).to(self.device)
         self.optimizer = optim.Adam(self.Q.parameters(), lr=self.lr)
 
         # Experience Replay Buffer
