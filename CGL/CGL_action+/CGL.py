@@ -252,10 +252,11 @@ class sim:
             self.__step_state_cpu()
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
-    def reward(self, aliveScale=1):
+    def reward(self, aliveScale=0):
         rewardWorld = self.world.astype(np.int8)
-        rewardWorld[rewardWorld == 0] = np.int8(self.spawnStabilityFactor + 1 * aliveScale)
-        rewardWorld[rewardWorld == 1] = 0                                                               # Used to remove 1's as to not impact stability factor.
+        aliveIndx = self.world == 1
+        rewardWorld[rewardWorld == 0] = np.int8(self.spawnStabilityFactor * aliveScale)
+        rewardWorld[aliveIndx] = 0                                                                      # Used to remove 1's as to not impact stability factor.
         return np.add.reduce(self.stable, dtype=np.int32) + np.add.reduce(rewardWorld, dtype=np.int32)  # Faster than np.sum() as of 7 APR 2024.
     
     # Returns the count of alive cells in the system.
@@ -271,6 +272,18 @@ class sim:
     # This will compare some input world state with the current state and return true if they match.
     def match(self, terminalState):
         return (self.world==terminalState.flatten()).all()
+
+    # This will return a breakdown or value count for stability factor matrix.
+    def breakdown_stable(self):
+        unique, counts = np.unique(self.stable, return_counts=True)
+        breakdown = np.asarray((unique, counts))
+        return breakdown
+    
+    # This will return a breakdown or value count for the world.
+    def breakdown_state(self):
+        unique, counts = np.unique(self.world, return_counts=True)
+        breakdown = np.asarray((unique, counts))
+        return breakdown
 
 # --- I/O ---
     # Will either return a vector OR a 2D square matrix of the system. NEED TO DO DEEP COPY!
@@ -307,9 +320,27 @@ class sim:
     def get_state_space_dim(self):
         return 2 ** self.size
     
-    # Get the action space, this is the dimnesion of all possible actions.
-    def get_action_space_dim(self):
-        return self.size + 1    # Plus 1 since an action we can take is "do nothing".
+    # Compute the possible maximum density for still life.
+    # This is periodic therefore the use of special tables can be used.
+    # https://www.sciencedirect.com/science/article/pii/S0004370212000124?ref=pdf_download&fr=RR-2&rr=87d2acb2c840ea2a
+    def get_max_density(self):
+        density = 0
+        table7 = [0, 0, 4, 6, 8, 16, 18, 28, 36, 43, 
+               54, 64, 76, 90, 104, 119, 136, 152, 171, 190,
+               210, 232, 253, 276, 302, 326, 353, 379, 407, 437, 
+               467, 497, 531, 563, 598, 633, 668, 706, 744, 782, 
+               824, 864, 907, 949, 993, 1039, 1085, 1132, 1181, 1229,
+               1280, 1331, 1382, 1436, 1490, 1545, 1602, 1658, 1717, 1776, 1835]
+        thrm6 = [0, 1, 3, 8, 9, 11, 16, 17, 19, 25, 27, 31, 33, 39, 41, 47, 49]
+
+        if self.side <= 60:
+            density = table7[self.side]
+        elif self.side % 54 in thrm6:
+            density = np.floor((self.side ** 2 / 2) + 17 / 27 * self.side - 2)
+        else:
+            density = np.floor((self.side ** 2 / 2) + 17 / 27 * self.side - 1)
+
+        return density
 
     # Expects a new state the same dimensions and side length of the original state. This is an alternative to toggling specific states on and off.
     def update_state(self, newState, side):

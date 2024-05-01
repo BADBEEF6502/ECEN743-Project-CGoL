@@ -5,6 +5,26 @@ import argparse
 from collections import deque
 from dqn import DQNAgent
 
+class heatmap:
+    def __init__(self, side):
+        self.heat_map_matrix = np.zeros((side, side))
+    
+    def clear(self):
+        self.heat_map_matrix = np.zeros_like(self.heat_map_matrix)
+
+    def get_heatmap(self):
+        return self.heat_map_matrix
+    
+    def breakdown(self):
+        unique, counts = np.unique(self.heat_map_matrix, return_counts=True)
+        breakdown = np.asarray((unique, counts))
+        return breakdown
+    
+    def evaluate(self):
+        return np.sum(self.heat_map_matrix, dtype=np.uint32)
+    
+    def update(self, state):
+        self.heat_map_matrix += state
 
 # Print a pretty state matrix.
 def print_state(state):
@@ -33,7 +53,7 @@ def take_action(center, side):
         up = (y + size - side) % size
         down = (y + side) % size
 
-
+        # Place the 2x2 block anchored in upper left corner.
         action.append(x + y)                # "Center" is top left anchor.
         action.append(right + y)            # Directly right from anchor.
         action.append(x + down)             # Directly underneath anchor.
@@ -62,9 +82,8 @@ if __name__ == "__main__":
     parser.add_argument("--gpu-index", default=0, type=int, help='GPU device to select for neural network and CGL enviornment.')                # GPU index
     parser.add_argument("--max-esp-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
     parser.add_argument("--net-mul", default=2, type=float, help='Multiplier for hidden layers in neural network.')                             # Multiplier for hidden values in neural network.
-    parser.add_argument("--alive-scale", default=1, type=float, help='Used to scale reward regarding alive cells, values between [-1, 1]')      # Used to scalue up or down the impact of 
-    parser.add_argument("--print-state", action='store_true', help='Print the current state of the system.')                                    # Useful for debugging, print the current state of the system.
-    parser.add_argument("--print-stable", action='store_true', help='Print the stability matrix of the system.')                                # Useful for debugging, Print the stability matrix of the system.
+    parser.add_argument("--alive-scale", default=0, type=float, help='Used to scale reward regarding alive cells.')                             # Used to scalue up or down the impact of 
+    parser.add_argument("--verbose", action='store_true', help='Print the current state of the system heatmap.')                                # Useful for debugging, print the current state of the system.
     parser.add_argument("--spawn", default=-2, type=int, help='Spawn stability factor.')                                                        # Used to determine at what value the cells spawn.
     parser.add_argument("--stable", default=2, type=int, help='Max stability factor.')                                                          # Used to determine when maximum stability is achieved.
     parser.add_argument("--cpu", action='store_true', help='Force CGL to use CPU.')                                                             # Used for non-gpu systems.
@@ -101,16 +120,25 @@ if __name__ == "__main__":
     epsilon = args.epsilon_start 
     epsilon_decay = args.epsilon_decay
     moving_window = deque(maxlen=100)
+    max_density = env.get_max_density()
+    density_threshold = deque(maxlen=args.max_esp_len)
+    density_threshold.extend([0 * args.max_esp_len])
+    heat_map = heatmap(args.side)
 
     # Main program loop.
     print('Episodes\tRewards\tTime (s)')
     start = time.process_time()             # Start the timer.
+    # Each episode.
     for e in range(args.n_episodes):        # Run for some number of episodes.
         env.reset()                         # Reset the enviornment to what it started with originally.
         state = env.get_stable(vector=True, shallow=True)
         
         curr_reward = 0
-        for _ in range(args.max_esp_len):   # Run for maximum length of 1 episode.
+        # Episode duration.
+        #for _ in range(args.max_esp_len):   # Run for maximum length of 1 episode.
+        last_density_threshold = 0
+        density_threshold_counter = 0
+        while last_density_threshold <= np.mean(density_threshold):
             center = learner.select_action(state, epsilon) 
             
             toggle_sequence = take_action(center, args.side)
@@ -121,21 +149,32 @@ if __name__ == "__main__":
             n_state = env.get_stable(vector=True, shallow=True)
             reward = env.reward(args.alive_scale)
             learner.step(state, center, reward, n_state)
-            
+
             state = n_state
             curr_reward += reward
-            
+
+            if density_threshold_counter == args.max_esp_len:
+                density_threshold_counter = 0
+                last_density_threshold = np.mean(density_threshold)
+
+            density_threshold.append(env.alive() / env.get_state_dim())
+            density_threshold_counter += 1
+
+        heat_map.update(env.get_state())
+        # Update epsilon and moving window reward.
         moving_window.append(curr_reward)
         epsilon = epsilon * epsilon_decay
+
+        # Optional print outs.
         if e % 10 == 0:
             print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}')
-            start = time.process_time()         # Start the timer.
-            if args.print_state:
-                print_state(env.get_state())
-            if args.print_stable:
-                print(env.get_stable())
+            start = time.process_time()         # Start the timer again for new episode.
+            if args.verbose:
+                print(heat_map.evaluate())
+                print(heat_map.breakdown())
+                heat_map.clear()
     
-    # Final prints.
+    # Episodes done, final prints.
     print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}')    # Final printout of of episode, mean reward, and time duration.
     learner.save(f'{args.side}')  # Save the final state of the learner.
 quit()
