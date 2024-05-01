@@ -93,9 +93,9 @@ class policy_network(nn.Module):
         Input: State
         Output: Sample drawn from a normal disribution with mean and std
         '''
-        a_mean, _, a_std = self.forward(state)
-        action = torch.normal(a_mean, a_std)
-        return action
+        a_mean, _, a_std = self.forward(state)#retrun mean, log standard, stdev
+        action = torch.normal(a_mean, a_std)#Make a normal distribution of mean action and stdev and sample points to put into action
+        return action#Return tensor 
 
     def get_log_prob(self, state, action):
         '''
@@ -169,7 +169,7 @@ class PGAgent():
                         if evaluate:
                             action = self.policy(state_ten)[0][0].numpy() # Take mean action during evaluation
                         else:
-                            action = self.policy.select_action(state_ten)[0].numpy() # Sample from distribution during training
+                            action = self.policy.select_action(state_ten)[0].numpy() # Sample from distribution during training Suppose to be one number
                     print(action)
                     action = action.argmax().cpu()#.astype(np.float64)
                     n_state,reward,terminated,truncated,_ = env.step(action) # Execute action in the environment
@@ -208,7 +208,7 @@ class PGAgent():
                         if evaluate:
                             action = self.policy(state_ten)[0][0].numpy() # Take mean action during evaluation
                         else:
-                            action = self.policy.select_action(state_ten)[0].numpy() # Sample from distribution during training
+                            action = self.policy.select_action(state_ten)[0].numpy() # Sample from distribution during training Suppose to be one number
                     action = action.argmax().cpu()#.astype(np.float64) ###Not sure how to handle action here because it is a array of values, so I just pick the argmax.
                     
                     #n_state,reward,terminated,truncated,_ = env.step(action) # Execute action in the environment
