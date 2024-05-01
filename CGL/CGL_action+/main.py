@@ -62,6 +62,8 @@ if __name__ == "__main__":
     parser.add_argument("--gpu-index", default=0, type=int, help='GPU device to select for neural network and CGL enviornment.')                # GPU index
     parser.add_argument("--max-esp-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
     parser.add_argument("--net-mul", default=2, type=float, help='Multiplier for hidden layers in neural network.')                             # Multiplier for hidden values in neural network.
+    parser.add_argument("--print-state", action='store_true', help='Print the current state of the system.')                                    # Useful for debugging, print the current state of the system.
+    parser.add_argument("--print-stable", action='store_true', help='Print the stability matrix of the system.')                                # Useful for debugging, Print the stability matrix of the system.
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1, help='Start value of epsilon.')                                                           # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01, help='End value of epsilon.')                                                            # end value of epsilon
@@ -124,7 +126,10 @@ if __name__ == "__main__":
         if e % 10 == 0:
             print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}')
             start = time.process_time()         # Start the timer.
-            print_state(env.get_state())
+            if args.print_state:
+                print_state(env.get_state())
+            if args.print_stable:
+                print(env.get_stable())
     
     # Final prints.
     print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}')    # Final printout of of episode, mean reward, and time duration.
