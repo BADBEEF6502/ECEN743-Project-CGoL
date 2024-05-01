@@ -252,8 +252,11 @@ class sim:
             self.__step_state_cpu()
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
-    def reward(self):
-        return np.add.reduce(self.stable, dtype=np.int32) # Faster than np.sum() as of 7 APR 2024.
+    def reward(self, aliveScale=1):
+        rewardWorld = self.world.astype(np.int8)
+        rewardWorld[rewardWorld == 0] = np.int8(self.spawnStabilityFactor + 1 * aliveScale)
+        rewardWorld[rewardWorld == 1] = 0                                                               # Used to remove 1's as to not impact stability factor.
+        return np.add.reduce(self.stable, dtype=np.int32) + np.add.reduce(rewardWorld, dtype=np.int32)  # Faster than np.sum() as of 7 APR 2024.
     
     # Returns the count of alive cells in the system.
     def alive(self):

@@ -62,15 +62,19 @@ if __name__ == "__main__":
     parser.add_argument("--gpu-index", default=0, type=int, help='GPU device to select for neural network and CGL enviornment.')                # GPU index
     parser.add_argument("--max-esp-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
     parser.add_argument("--net-mul", default=2, type=float, help='Multiplier for hidden layers in neural network.')                             # Multiplier for hidden values in neural network.
+    parser.add_argument("--alive-scale", default=1, type=float, help='Used to scale reward regarding alive cells, values between [-1, 1]')      # Used to scalue up or down the impact of 
     parser.add_argument("--print-state", action='store_true', help='Print the current state of the system.')                                    # Useful for debugging, print the current state of the system.
     parser.add_argument("--print-stable", action='store_true', help='Print the stability matrix of the system.')                                # Useful for debugging, Print the stability matrix of the system.
+    parser.add_argument("--spawn", default=-2, type=int, help='Spawn stability factor.')                                                        # Used to determine at what value the cells spawn.
+    parser.add_argument("--stable", default=2, type=int, help='Max stability factor.')                                                          # Used to determine when maximum stability is achieved.
+    parser.add_argument("--cpu", action='store_true', help='Force CGL to use CPU.')                                                             # Used for non-gpu systems.
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1, help='Start value of epsilon.')                                                           # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01, help='End value of epsilon.')                                                            # end value of epsilon
     parser.add_argument("--epsilon-decay", default=0.9965, help='Decay value of epsilon.')                                                      # decay value of epsilon
     args = parser.parse_args()
 
-    env = CGL.sim(side=args.side, seed=args.seed, gpu=True, gpu_select=args.gpu_index, spawnStabilityFactor=-2, stableStabilityFactor=2)
+    env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable)
     action_space = (args.side ** 2) * 2 # Times 2 for blocks and single toggles. #(env.get_side() - 1) ** 2
 
     # Print list of inputs for debugging.
@@ -111,11 +115,11 @@ if __name__ == "__main__":
             
             toggle_sequence = take_action(center, args.side)
             env.toggle_state(toggle_sequence)    # Commit action.
-            env.step()                  # Update the simulator's state.
+            env.step()                           # Update the simulator's state.
 
             # Collect the reward and state and teach the DQN to learn.
             n_state = env.get_stable(vector=True, shallow=True)
-            reward = env.reward()
+            reward = env.reward(args.alive_scale)
             learner.step(state, center, reward, n_state)
             
             state = n_state
