@@ -52,7 +52,7 @@ if GPU_CAPABLE:
 
 class sim:
     # Default to no state (1D or 2D numpy array for CGoL), side is the side length of the square, seed is used for random state generation, gpu chooses whether to use GPU or not, device selects the GPU device to use.
-    def __init__(self, state=None, side=8, seed=8, gpu=False, gpu_select=0, warp=8, spawnStabilityFactor=-1, stableStabilityFactor=1):
+    def __init__(self, state=None, side=8, seed=8, gpu=False, gpu_select=0, warp=8, spawnStabilityFactor=-1, stableStabilityFactor=1, runBlank=False):
         # Validate input.
         if not isinstance(state, np.ndarray) and state is not None and not isinstance(state, list):
             raise TypeError('state variable must be a list or Numpy ndarray!')
@@ -66,6 +66,8 @@ class sim:
             raise ValueError('seed must be positive integer!')
         if not isinstance(gpu, bool):
             raise TypeError('gpu must be bool!')
+        if not isinstance(runBlank, bool):
+            raise TypeError('runBlank must be a bool!')
         if not isinstance(seed, int):
             raise TypeError('gpu_select must be integer!')
         if seed < 0:
@@ -104,9 +106,13 @@ class sim:
             np.random.seed(seed)                            # Set constant seed for random environemnts (useful for debugging).
             self.side = side
             self.size = side ** 2
-            self.world = np.random.randint(2, size=self.size, dtype=np.uint8)
+            if runBlank:                                    # Use a blank grid of zeros rather than random grid.
+                self.world = np.zeros(self.size, dtype=np.uint8)
+            else:
+                self.world = np.random.randint(2, size=self.size, dtype=np.uint8)
             self.initState = np.copy(self.world)            # Used when reset() is called.
 
+        self.max_density = self.get_max_density()                   # See below for functiont to get maximum density for still life.
         self.temp = np.empty_like(self.world)                       # Used here incase of forceCPU=True.
         self.stable = np.zeros(self.size, dtype=np.int8)            # Used to store stable values for each cell, NOTE: IS SIGNED!
         self.stable[self.world != 0] = self.spawnStabilityFactor    # Every cell starts at the spawnStabilityFactor.
@@ -252,14 +258,24 @@ class sim:
             self.__step_state_cpu()
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
-    def reward(self, aliveScale=0):
-        if aliveScale == 0:                                                                             # Used to save on computation time if aliveScale = 0.
-            return np.add.reduce(self.stable, dtype=np.int32)
-        rewardWorld = self.world.astype(np.int8)
-        aliveIndx = self.world == 1
-        rewardWorld[rewardWorld == 0] = np.int8(self.spawnStabilityFactor * aliveScale)
-        rewardWorld[aliveIndx] = 0                                                                      # Used to remove 1's as to not impact stability factor.
-        return np.add.reduce(self.stable, dtype=np.int32) + np.add.reduce(rewardWorld, dtype=np.int32)  # Faster than np.sum() as of 7 APR 2024.
+    def reward(self, emptyScale=0, curr_density=0, reward_exp=False):
+        emptyScaleReward = 0
+        densityReward = 0
+        base = np.add.reduce(self.stable, dtype=np.int32)
+
+        # Will take from state space and motivate the NN to choose that are empty. Zero out cells that are alive as to not bias them.
+        if emptyScale != 0:
+            rewardWorld = self.world.astype(np.int8)
+            aliveIndx = self.world == 1
+            rewardWorld[rewardWorld == 0] = np.int8(self.spawnStabilityFactor * emptyScale)
+            rewardWorld[aliveIndx] = 0     
+            emptyScaleReward = np.add.reduce(rewardWorld, dtype=np.int32)
+        
+        # Exponential reward modifier to reduce destorying cells.
+        if reward_exp:
+            densityReward = base * np.exp(-(self.max_density - curr_density))
+
+        return base + emptyScaleReward + densityReward
     
     # Returns the count of alive cells in the system.
     def alive(self):
@@ -338,9 +354,9 @@ class sim:
         if self.side <= 60:
             density = table7[self.side]
         elif self.side % 54 in thrm6:
-            density = np.floor((self.side ** 2 / 2) + (17 / 27) * self.side - 2)
+            density = np.floor((self.size / 2) + (17 / 27) * self.side - 2)
         else:
-            density = np.floor((self.side ** 2 / 2) + (17 / 27) * self.side - 1)
+            density = np.floor((self.size / 2) + (17 / 27) * self.side - 1)
 
         return density
 

@@ -2,12 +2,13 @@ import CGL
 import time
 import numpy as np
 import argparse
+import pickle
 from collections import deque
 from dqn import DQNAgent
 
 class heatmap:
     def __init__(self, side):
-        self.heat_map_matrix = np.zeros((side, side))
+        self.heat_map_matrix = np.zeros((side, side), dtype=np.uint32)
     
     def clear(self):
         self.heat_map_matrix = np.zeros_like(self.heat_map_matrix)
@@ -27,10 +28,10 @@ class heatmap:
         self.heat_map_matrix += state
 
 # Print a pretty state matrix.
-def print_state(state):
-    state_str = np.where(state == 1, '$', '-')
-    for row in state_str:
-        print(" ".join(map(str, row)))
+def print_matrix(state, joinStr):
+#    state_str = np.where(state == 1, '$', '-')
+    for row in state:
+        print(joinStr.join(map(str, row)))
 
 # Take action between single toggle or 2x2 block.
 def take_action(center, side):
@@ -63,6 +64,7 @@ def take_action(center, side):
     return action
 
 if __name__ == "__main__":
+    EVAL_PERIOD = 10    # Make evaluations every 10th episode.
     # HyperParameters For DQN
     parser = argparse.ArgumentParser(
                         prog='CGL RL Agent -- Main Launcher',
@@ -80,25 +82,30 @@ if __name__ == "__main__":
     parser.add_argument("--exp-gpu", action='store_true', help='Put experience replay buffer on GPU for speed, defaults to main memory/CPU.')   # experience replay buffer length
     parser.add_argument("--update-freq", default=4, type=int, help='Update frequency of target network.')                                       # update frequency of target network
     parser.add_argument("--gpu-index", default=0, type=int, help='GPU device to select for neural network and CGL enviornment.')                # GPU index
-    parser.add_argument("--max-esp-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
+    parser.add_argument("--max-esp-len", default=100, type=int, help='Maximum length of each episode.')                                         # maximum time of an episode
     parser.add_argument("--net-mul", default=2, type=float, help='Multiplier for hidden layers in neural network.')                             # Multiplier for hidden values in neural network.
-    parser.add_argument("--alive-scale", default=0, type=float, help='Used to scale reward regarding alive cells.')                             # Used to scalue up or down the impact of 
+    parser.add_argument("--empty-scale", default=0, type=float, help='Used to scale reward regarding empty cells.')                             # Used to scalue up or down the impact of empty cells on reward.
     parser.add_argument("--verbose", action='store_true', help='Print the current state of the system heatmap.')                                # Useful for debugging, print the current state of the system.
     parser.add_argument("--spawn", default=-2, type=int, help='Spawn stability factor.')                                                        # Used to determine at what value the cells spawn.
     parser.add_argument("--stable", default=2, type=int, help='Max stability factor.')                                                          # Used to determine when maximum stability is achieved.
     parser.add_argument("--cpu", action='store_true', help='Force CGL to use CPU.')                                                             # Used for non-gpu systems.
+    parser.add_argument("--run-blank", action='store_true', help="Initialize a blank enviornment, override's seed for enviornment.")            # Used for debugging.
+    parser.add_argument("--reward-exp", actino='store_true', help='Exponent used to contrl reward function.')                                   # Modifier for reward function.
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1, help='Start value of epsilon.')                                                           # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01, help='End value of epsilon.')                                                            # end value of epsilon
     parser.add_argument("--epsilon-decay", default=0.9965, help='Decay value of epsilon.')                                                      # decay value of epsilon
     args = parser.parse_args()
 
-    env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable)
+    env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable, runBlank=args.run_blank)
     action_space = (args.side ** 2) * 2 # Times 2 for blocks and single toggles. #(env.get_side() - 1) ** 2
 
     # Print list of inputs for debugging.
     for arg in vars(args):
         print(f'{arg}\t{getattr(args, arg)}')
+
+    # Print the starting state.
+    print_matrix(env.get_state(), ' ')
 
     kwargs = {
         "state_dim":    env.get_state_dim(),
@@ -125,6 +132,11 @@ if __name__ == "__main__":
     density_threshold.extend([0 * args.max_esp_len])
     heat_map = heatmap(args.side)
 
+    # Store's data for visualizaitons.
+    data_breakdown = []
+    data_evals     = []
+    data_rewards   = []
+
     # Main program loop.
     print('Episodes\tRewards\tTime (s)')
     start = time.process_time()             # Start the timer.
@@ -147,7 +159,8 @@ if __name__ == "__main__":
 
             # Collect the reward and state and teach the DQN to learn.
             n_state = env.get_stable(vector=True, shallow=True)
-            reward = env.reward(args.alive_scale)
+            curr_density = env.alive() / env.get_state_dim()
+            reward = env.reward(args.empty_scale, curr_density, args.reward_exp)
             learner.step(state, center, reward, n_state)
 
             state = n_state
@@ -157,7 +170,7 @@ if __name__ == "__main__":
                 density_threshold_counter = 0
                 last_density_threshold = np.mean(density_threshold)
 
-            density_threshold.append(env.alive() / env.get_state_dim())
+            density_threshold.append(curr_density)
             density_threshold_counter += 1
 
         heat_map.update(env.get_state())
@@ -166,16 +179,22 @@ if __name__ == "__main__":
         epsilon = epsilon * epsilon_decay
 
         # Optional print outs.
-        if e % 10 == 0:
+        if e % EVAL_PERIOD == 0:
             print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}')
             start = time.process_time()         # Start the timer again for new episode.
             if args.verbose:
+                print_matrix(heat_map.get_heatmap(), ' ')
                 print(heat_map.evaluate())
-                print(heat_map.breakdown())
+                print_matrix(heat_map.breakdown(), '\t')
+                data_breakdown.append(heat_map.breakdown().T)
+                data_evals.append(heat_map.evaluate())
+                data_rewards.append(np.mean(moving_window))
                 heat_map.clear()
-    
+
     # Episodes done, final prints.
     print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}')    # Final printout of of episode, mean reward, and time duration.
     learner.save(f'{args.side}')  # Save the final state of the learner.
-    np.
+    data2save = {'breakdown' : data_breakdown, 'evals' : data_evals, 'rewards' : data_rewards}
+    pickle.dump(data2save, open(f'data_{args.side}.pkl', 'wb'))
+
 quit()
