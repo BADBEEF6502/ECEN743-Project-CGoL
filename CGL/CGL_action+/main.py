@@ -81,7 +81,7 @@ if __name__ == "__main__":
     parser.add_argument("--exp-gpu", action='store_true', help='Put experience replay buffer on GPU for speed, defaults to main memory/CPU.')   # experience replay buffer length
     parser.add_argument("--update-freq", default=4, type=int, help='Update frequency of target network.')                                       # update frequency of target network
     parser.add_argument("--gpu-index", default=0, type=int, help='GPU device to select for neural network and CGL enviornment.')                # GPU index
-    parser.add_argument("--max-esp-len", default=100, type=int, help='Maximum length of each episode.')                                         # maximum time of an episode
+    parser.add_argument("--max-esp-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
     parser.add_argument("--net-mul", default=2, type=float, help='Multiplier for hidden layers in neural network.')                             # Multiplier for hidden values in neural network.
     parser.add_argument("--empty-scale", default=0, type=float, help='Used to scale reward regarding empty cells.')                             # Used to scalue up or down the impact of empty cells on reward.
     parser.add_argument("--verbose", action='store_true', help='Print the current state of the system heatmap.')                                # Useful for debugging, print the current state of the system.
