@@ -90,7 +90,7 @@ if __name__ == "__main__":
     parser.add_argument("--stable", default=2, type=int, help='Max stability factor.')                                                          # Used to determine when maximum stability is achieved.
     parser.add_argument("--cpu", action='store_true', help='Force CGL to use CPU.')                                                             # Used for non-gpu systems.
     parser.add_argument("--run-blank", action='store_true', help="Initialize a blank enviornment, override's seed for enviornment.")            # Used for debugging.
-    parser.add_argument("--reward-exp", actino='store_true', help='Exponent used to contrl reward function.')                                   # Modifier for reward function.
+    parser.add_argument("--reward-exp", action='store_true', help='Exponent used to contrl reward function.')                                   # Modifier for reward function.
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1, help='Start value of epsilon.')                                                           # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01, help='End value of epsilon.')                                                            # end value of epsilon
