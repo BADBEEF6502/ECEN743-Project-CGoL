@@ -50,15 +50,21 @@ class QNetwork(nn.Module):
         """
         super(QNetwork, self).__init__()
         hidden = int(action_dim * net_mul)
-        self.l1 = nn.Linear(state_dim, hidden)
-        self.l2 = nn.Linear(hidden, hidden)
-        self.l3 = nn.Linear(hidden, action_dim)
+        self.l1 = nn.Linear(state_dim, hidden).half()
+        self.l2 = nn.Linear(hidden, hidden).half()
+        self.l3 = nn.Linear(hidden, hidden).half()
+        self.l4 = nn.Linear(hidden, hidden).half()
+        self.l5 = nn.Linear(hidden, action_dim).half()
         
     def forward(self, state):
-        state = state.to(torch.float32)     # OPTIMIZATION: Can change this to float16, but may cause issues and need to adjust network too.
-        q = F.relu(self.l1(state.cuda()))
-        q = F.relu(self.l2(q))
-        return self.l3(q)
+        # If vanishing gradient, try something differentiable.
+        # Leaky ReLU? Parametric ReLU and reduce to float16?
+        state = state.to(torch.float16)     # OPTIMIZATION: Can change this to float16, but may cause issues and need to adjust network too.
+        q = F.tanh(self.l1(state.cuda()))
+        q = F.tanh(self.l2(q))
+        q = F.tanh(self.l3(q))
+        q = F.tanh(self.l4(q))
+        return self.l5(q)
 
 class DQNAgent():
 

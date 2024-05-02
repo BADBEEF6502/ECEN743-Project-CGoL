@@ -258,7 +258,7 @@ class sim:
             self.__step_state_cpu()
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
-    def reward(self, emptyScale=0, reward_exp=0, curr_density=0, prev_density=0, useDensity=False):
+    def reward(self, emptyScale=0, reward_exp=0, curr_density=0, useDensity=False):
         reward = 0
         emptyScaleReward = 0
         densityReward = 0
@@ -274,7 +274,7 @@ class sim:
         
         # Exponential reward modifier to reduce destorying cells.
         if reward_exp != 0:
-            densityReward = base * reward_exp ** -(prev_density - curr_density)
+            densityReward = base * reward_exp ** -(self.max_density - curr_density)
 
         # Use density or stability matrix.
         if not useDensity:
