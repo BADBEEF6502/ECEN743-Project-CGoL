@@ -181,14 +181,14 @@ if __name__ == "__main__":
         # Optional print outs.
         if e % EVAL_PERIOD == 0:
             print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}')
+            data_breakdown.append(heat_map.breakdown().T)
+            data_evals.append(heat_map.evaluate())
+            data_rewards.append(np.mean(moving_window))
             start = time.process_time()         # Start the timer again for new episode.
             if args.verbose:
                 print_matrix(heat_map.get_heatmap(), ' ')
                 print(heat_map.evaluate())
                 print_matrix(heat_map.breakdown(), '\t')
-                data_breakdown.append(heat_map.breakdown().T)
-                data_evals.append(heat_map.evaluate())
-                data_rewards.append(np.mean(moving_window))
                 heat_map.clear()
 
     # Episodes done, final prints.
