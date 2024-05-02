@@ -253,6 +253,8 @@ class sim:
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
     def reward(self, aliveScale=0):
+        if aliveScale == 0:                                                                             # Used to save on computation time if aliveScale = 0.
+            return np.add.reduce(self.stable, dtype=np.int32)
         rewardWorld = self.world.astype(np.int8)
         aliveIndx = self.world == 1
         rewardWorld[rewardWorld == 0] = np.int8(self.spawnStabilityFactor * aliveScale)
@@ -336,9 +338,9 @@ class sim:
         if self.side <= 60:
             density = table7[self.side]
         elif self.side % 54 in thrm6:
-            density = np.floor((self.side ** 2 / 2) + 17 / 27 * self.side - 2)
+            density = np.floor((self.side ** 2 / 2) + (17 / 27) * self.side - 2)
         else:
-            density = np.floor((self.side ** 2 / 2) + 17 / 27 * self.side - 1)
+            density = np.floor((self.side ** 2 / 2) + (17 / 27) * self.side - 1)
 
         return density
 

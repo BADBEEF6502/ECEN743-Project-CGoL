@@ -140,7 +140,7 @@ if __name__ == "__main__":
         density_threshold_counter = 0
         while last_density_threshold <= np.mean(density_threshold):
             center = learner.select_action(state, epsilon) 
-            
+
             toggle_sequence = take_action(center, args.side)
             env.toggle_state(toggle_sequence)    # Commit action.
             env.step()                           # Update the simulator's state.
@@ -177,4 +177,5 @@ if __name__ == "__main__":
     # Episodes done, final prints.
     print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}')    # Final printout of of episode, mean reward, and time duration.
     learner.save(f'{args.side}')  # Save the final state of the learner.
+    np.
 quit()

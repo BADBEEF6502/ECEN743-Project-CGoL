@@ -97,7 +97,7 @@ class DQNAgent():
         self.lr = lr
         self.update_freq = update_freq
         self.batch_size = batch_size
-        np.random.seed(seed)
+        np.random.seed(seed) # Used for consistency so the DQN's actions are consistent.
         self.device = torch.device('cuda', index=gpu_index) if torch.cuda.is_available() else torch.device('cpu')
 
         # Setting up the NNs
