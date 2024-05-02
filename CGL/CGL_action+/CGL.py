@@ -258,7 +258,8 @@ class sim:
             self.__step_state_cpu()
 
     # Returns the total stable of the system - NOTE: IS SIGNED!
-    def reward(self, emptyScale=0, curr_density=0, reward_exp=False):
+    def reward(self, emptyScale=0, reward_exp=0, curr_density=0, prev_density=0, useDensity=False):
+        reward = 0
         emptyScaleReward = 0
         densityReward = 0
         base = np.add.reduce(self.stable, dtype=np.int32)
@@ -272,10 +273,16 @@ class sim:
             emptyScaleReward = np.add.reduce(rewardWorld, dtype=np.int32)
         
         # Exponential reward modifier to reduce destorying cells.
-        if reward_exp:
-            densityReward = base * np.exp(-(self.max_density - curr_density))
+        if reward_exp != 0:
+            densityReward = base * reward_exp ** -(prev_density - curr_density)
 
-        return base + emptyScaleReward + densityReward
+        # Use density or stability matrix.
+        if not useDensity:
+            reward = base + emptyScaleReward + densityReward
+        else:
+            reward = np.int64(self.alive())     # This is done for torch tensors.
+
+        return reward
     
     # Returns the count of alive cells in the system.
     def alive(self):

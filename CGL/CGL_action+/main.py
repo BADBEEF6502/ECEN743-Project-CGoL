@@ -64,7 +64,6 @@ def take_action(center, side):
     return action
 
 if __name__ == "__main__":
-    EVAL_PERIOD = 10    # Make evaluations every 10th episode.
     # HyperParameters For DQN
     parser = argparse.ArgumentParser(
                         prog='CGL RL Agent -- Main Launcher',
@@ -90,7 +89,8 @@ if __name__ == "__main__":
     parser.add_argument("--stable", default=2, type=int, help='Max stability factor.')                                                          # Used to determine when maximum stability is achieved.
     parser.add_argument("--cpu", action='store_true', help='Force CGL to use CPU.')                                                             # Used for non-gpu systems.
     parser.add_argument("--run-blank", action='store_true', help="Initialize a blank enviornment, override's seed for enviornment.")            # Used for debugging.
-    parser.add_argument("--reward-exp", action='store_true', help='Exponent used to contrl reward function.')                                   # Modifier for reward function.
+    parser.add_argument("--reward-exp", default=0, type=float, help='Exponent used to control reward function.')                                # Modifier for reward function.
+    parser.add_argument("--eval-period", default=10, type=int, help='Used to control evaluation period for data collection.')                   # Modifier for reward function.
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1, help='Start value of epsilon.')                                                           # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01, help='End value of epsilon.')                                                            # end value of epsilon
@@ -126,16 +126,17 @@ if __name__ == "__main__":
     learner = DQNAgent(**kwargs)
     epsilon = args.epsilon_start 
     epsilon_decay = args.epsilon_decay
-    moving_window = deque(maxlen=100)
+    moving_window = deque(maxlen=args.eval_period)
     max_density = env.get_max_density()
-    density_threshold = deque(maxlen=args.max_esp_len)
-    density_threshold.extend([0 * args.max_esp_len])
+    # density_threshold = deque(maxlen=args.max_esp_len)
+    # density_threshold.extend([0 * args.max_esp_len])
     heat_map = heatmap(args.side)
 
     # Store's data for visualizaitons.
-    data_breakdown = []
-    data_evals     = []
-    data_rewards   = []
+    data_breakdown    = []
+    data_evals        = []
+    data_rewards      = []
+    data_duration_len = []
 
     # Main program loop.
     print('Episodes\tRewards\tTime (s)')
@@ -145,12 +146,16 @@ if __name__ == "__main__":
         env.reset()                         # Reset the enviornment to what it started with originally.
         state = env.get_stable(vector=True, shallow=True)
         
-        curr_reward = 0
+        curr_reward = []
         # Episode duration.
         #for _ in range(args.max_esp_len):   # Run for maximum length of 1 episode.
-        last_density_threshold = 0
-        density_threshold_counter = 0
-        while last_density_threshold <= np.mean(density_threshold):
+        # last_density_threshold = 0
+        # density_threshold_counter = 0
+        # duration_threshold = 0
+        # while last_density_threshold <= np.mean(density_threshold):
+            # print(last_density_threshold, np.mean(density_threshold))
+        prev_density = env.alive()
+        for _ in range(args.max_esp_len):
             center = learner.select_action(state, epsilon) 
 
             toggle_sequence = take_action(center, args.side)
@@ -160,41 +165,75 @@ if __name__ == "__main__":
             # Collect the reward and state and teach the DQN to learn.
             n_state = env.get_stable(vector=True, shallow=True)
             curr_density = env.alive() / env.get_state_dim()
-            reward = env.reward(args.empty_scale, curr_density, args.reward_exp)
+            reward = env.reward(args.empty_scale, args.reward_exp, curr_density, prev_density, useDensity=False)
             learner.step(state, center, reward, n_state)
+            prev_density = curr_density
 
             state = n_state
-            curr_reward += reward
+            curr_reward.append(reward)
+            # density_threshold.append(curr_density)
 
-            if density_threshold_counter == args.max_esp_len:
-                density_threshold_counter = 0
-                last_density_threshold = np.mean(density_threshold)
+            # if density_threshold_counter == args.max_esp_len:
+            #     density_threshold_counter = 0
+            #     last_density_threshold = np.mean(density_threshold)
 
-            density_threshold.append(curr_density)
-            density_threshold_counter += 1
+            # density_threshold_counter += 1
+            # duration_threshold += 1
 
-        heat_map.update(env.get_state())
         # Update epsilon and moving window reward.
-        moving_window.append(curr_reward)
+        moving_window.append(np.mean(curr_reward))
         epsilon = epsilon * epsilon_decay
 
+        # Run enviornment until it is stable to take heatmap data.
+        old = env.get_state()
+        env.step()
+        count_down = args.max_esp_len ** 2
+        while not env.match(old) and count_down:
+                old = env.get_state()
+                env.step()
+                count_down -= 1
+        print_matrix(env.get_state(), ' ')
+        heat_map.update(env.get_state())
+
         # Optional print outs.
-        if e % EVAL_PERIOD == 0:
+        if e % args.eval_period == 0:
             print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}')
+
+            # Perform "carry out to end" of current enviornment to collect stability data.
+            # ALIVE_WINDOW_MAX = 10
+            # alive_window = deque(maxlen=ALIVE_WINDOW_MAX)
+            # alive_window_old = 0
+            # alive_window_counter = 0
+            # while alive_window_old != np.mean(alive_window):
+            #     print(alive_window_old, np.mean(alive_window))
+            #     env.step()
+            #     alive_window.append(env.alive())
+            #     alive_window_counter += 1
+            #     if alive_window_counter == ALIVE_WINDOW_MAX:
+            #         alive_window_counter = 0
+            #         alive_window_old = np.mean(alive_window)
+            #         alive_window.append(env.alive())
+            #         print(alive_window_old, np.mean(alive_window))
+
+            #     print_matrix(old, ' ')
+
             data_breakdown.append(heat_map.breakdown().T)
             data_evals.append(heat_map.evaluate())
             data_rewards.append(np.mean(moving_window))
-            start = time.process_time()         # Start the timer again for new episode.
+            #data_duration_len.append(duration_threshold)
             if args.verbose:
                 print_matrix(heat_map.get_heatmap(), ' ')
                 print(heat_map.evaluate())
                 print_matrix(heat_map.breakdown(), '\t')
-                heat_map.clear()
+            heat_map.clear()
+
+            start = time.process_time()         # Start the timer again for new episode.
 
     # Episodes done, final prints.
     print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}')    # Final printout of of episode, mean reward, and time duration.
     learner.save(f'{args.side}')  # Save the final state of the learner.
-    data2save = {'breakdown' : data_breakdown, 'evals' : data_evals, 'rewards' : data_rewards}
-    pickle.dump(data2save, open(f'data_{args.side}.pkl', 'wb'))
+    data2save = {'breakdown' : data_breakdown, 'evals' : data_evals, 'rewards' : data_rewards, 'eval_period' : args.eval_period}
+    with open(f'data_{args.side}.pkl', 'wb') as f:
+        pickle.dump(data2save, f)
 
 quit()
