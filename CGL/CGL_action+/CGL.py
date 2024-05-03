@@ -52,7 +52,7 @@ if GPU_CAPABLE:
 
 class sim:
     # Default to no state (1D or 2D numpy array for CGoL), side is the side length of the square, seed is used for random state generation, gpu chooses whether to use GPU or not, device selects the GPU device to use.
-    def __init__(self, state=None, side=8, seed=8, gpu=False, gpu_select=0, warp=8, spawnStabilityFactor=-1, stableStabilityFactor=1, runBlank=False, emptyMul=0):
+    def __init__(self, state=None, side=8, seed=8, gpu=False, gpu_select=0, warp=8, spawnStabilityFactor=-1, stableStabilityFactor=1, runBlank=False, empty=0):
         # Validate input.
         if not isinstance(state, np.ndarray) and state is not None and not isinstance(state, list):
             raise TypeError('state variable must be a list or Numpy ndarray!')
@@ -76,10 +76,8 @@ class sim:
             raise TypeError('warp must be integer!')
         if warp < 0:
             raise ValueError('warp must be positive integer!')
-        if not isinstance(emptyMul, int):
-            raise TypeError('emptyMul must be integer!')
-        if emptyMul < 0:
-            raise ValueError('emptyMul must be positive integer!')
+        if not isinstance(empty, int):
+            raise TypeError('empty must be integer!')
         if not isinstance(spawnStabilityFactor, int):
             raise TypeError('spawnStabilityFactor must be an integer!')
         if not isinstance(stableStabilityFactor, int):
@@ -91,7 +89,7 @@ class sim:
         self.size = 0
         self.side = 0
         self.count = 0
-        self.emptyMul = emptyMul
+        self.empty = empty
         self.seed = seed
         self.spawnStabilityFactor = spawnStabilityFactor
         self.stableStabilityFactor = stableStabilityFactor
@@ -121,7 +119,7 @@ class sim:
         self.temp = np.empty_like(self.world)                                     # Used here incase of forceCPU=True.
         self.stable = np.zeros(self.size, dtype=np.int8)                          # Used to store stable values for each cell, NOTE: IS SIGNED!
         self.stable[self.world != 0] = self.spawnStabilityFactor                  # Every cell starts at the spawnStabilityFactor.
-        self.stable[self.stable == 0] = self.spawnStabilityFactor * self.emptyMul # Stability has negative for empty space.
+        self.stable[self.stable == 0] = self.empty                                # Stability has negative for empty space.
         self.initStable = np.copy(self.stable)                                    # Needed when reset() is called.
 
         # Setup CPU and GPU memory components here for speed.
@@ -188,10 +186,10 @@ class sim:
                             3. otherwise       do SPAWN * EMPTY_MUL */
                     unsigned char isMax = stable[cellLoc] == {};
                     char stabilityValue = stable[cellLoc];
-                    stable[cellLoc] = ((currState && prevState) * ((!isMax * (stabilityValue + 1)) | (isMax * stabilityValue))) | ((currState && !prevState) * {}) | (!currState * {});
+                    stable[cellLoc] = ((currState && prevState) * ((!isMax * (stabilityValue + 1)) | (isMax * stabilityValue))) | ((currState && !prevState) * {}) | (!currState * (stabilityValue + {}));
                 }}
             }}
-            """.format(self.stableStabilityFactor, self.spawnStabilityFactor, self.spawnStabilityFactor * self.emptyMul))
+            """.format(self.stableStabilityFactor, self.spawnStabilityFactor, self.empty))
 
             # Originally used inverse and add 1 for mask, but switched to bit shift for efficiency.
             self.run_gpu = cudaCode.get_function('run')
@@ -251,7 +249,7 @@ class sim:
             elif(currState and (not prevState)):
                 self.stable[cellLoc] = self.spawnStabilityFactor
             else:
-                self.stable[cellLoc] = self.spawnStabilityFactor * self.emptyMul
+                self.stable[cellLoc] += self.empty
         self.world = np.copy(self.temp)
 
 # --- SIMULATOR ---
@@ -389,10 +387,10 @@ class sim:
     # Store all of the attributes of the current system.
     # state=None, side=8, seed=8, gpu=False, gpu_select=0, warp=8, spawnStabilityFactor=-1
     def save(self):
-        return (self.world, self.stable, self.side, self.count, self.spawnStabilityFactor, self.stableStabilityFactor, self.emptyMul)
+        return (self.world, self.stable, self.side, self.count, self.spawnStabilityFactor, self.stableStabilityFactor, self.empty)
 
     # Load from memory an exact state setup.
-    def load(self, newState, newstable, side, count, spawnStabilityFactor, stableStabilityFactor, emptyMul):
+    def load(self, newState, newstable, side, count, spawnStabilityFactor, stableStabilityFactor, empty):
         if not isinstance(newState, np.ndarray) or not isinstance(newstable, np.ndarray):
             raise TypeError('newState and newstable variables must be a Numpy ndarray!')
         if not isinstance(side, int) or not isinstance(count, int):
@@ -406,7 +404,7 @@ class sim:
 
         self.stableStabilityFactor = stableStabilityFactor
         self.spawnStabilityFactor = spawnStabilityFactor
-        self.emptyMul = emptyMul
+        self.empty = empty
         self.size = side ** 2
         self.side = side
         self.count = count

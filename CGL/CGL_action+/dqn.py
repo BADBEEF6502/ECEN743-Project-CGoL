@@ -52,20 +52,23 @@ class QNetwork(nn.Module):
         hidden = int(action_dim * net_mul)
         self.l1 = nn.Linear(state_dim, hidden)
         self.l2 = nn.Linear(hidden, hidden)
-        self.l3 = nn.Linear(hidden, hidden)
-        self.l4 = nn.Linear(hidden, hidden)
-        self.l5 = nn.Linear(hidden, action_dim)
+        # self.l3 = nn.Linear(hidden, hidden)
+        # self.l4 = nn.Linear(hidden, hidden)
+        self.l3 = nn.Linear(hidden, action_dim)
         
     def forward(self, state):
         # If vanishing gradient, try something differentiable.
         # Leaky ReLU? Parametric ReLU and reduce to float16?
         state = state.to(torch.float32) # OPTIMIZATION: Can change this to float16, but may cause issues and need to adjust network too.
+        #state = F.normalize(state, p=2, dim=1)
 
-        q = F.tanh(self.l1(state.cuda()))
-        q = F.tanh(self.l2(q))
-        q = F.tanh(self.l3(q))
-        q = F.tanh(self.l4(q))
-        return self.l5(q)
+        state = (state - torch.mean(state)) / torch.std(state)
+
+        q = F.relu(self.l1(state.cuda()))
+        q = F.relu(self.l2(q))
+        # q = F.relu(self.l3(q))
+        # q = F.relu(self.l4(q))
+        return self.l3(q)
 
 class DQNAgent():
 
@@ -137,9 +140,9 @@ class DQNAgent():
     def select_action(self, state, epsilon):
         # Epsilon greedy exploration.
         s = torch.tensor(state, dtype=torch.int8) # Must convert numpy arrays to torch friendly tensors. Tho, these are read-only.
-        a = self.Q.forward(s).argmax().cpu()
+        a = int(self.Q.forward(s).argmax())
         if np.random.random_sample() < epsilon:
-            while a == self.Q.forward(s).argmax().cpu():
+            while a == int(self.Q.forward(s).argmax()):
                 a = np.random.randint(self.action_dim)
         return np.int32(a)                        # Action is the index the agent want's to toggle from dead to alive or visa versa. Torch cannot handle uint32!
 

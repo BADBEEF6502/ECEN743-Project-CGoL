@@ -7,6 +7,7 @@ import uuid
 import helper
 from collections import deque
 from dqn import DQNAgent
+import torch
 #from validate import validation
 
 if __name__ == "__main__":
@@ -46,7 +47,7 @@ if __name__ == "__main__":
     parser.add_argument("--epsilon-decay", default=0.9965, help='Decay value of epsilon.')                                                      # decay value of epsilon
     args = parser.parse_args()
 
-    env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable, runBlank=args.run_blank, emptyMul=args.empty_state)
+    env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable, runBlank=args.run_blank, empty=args.empty_state)
     action_space = (args.side ** 2) * 2 # Times 2 for blocks and single toggles. #(env.get_side() - 1) ** 2
 
     # Print list of inputs for debugging.
@@ -77,7 +78,7 @@ if __name__ == "__main__":
     epsilon_decay = args.epsilon_decay
     moving_window = deque(maxlen=args.max_eps_len)
     max_density = env.get_max_density()
-    all_empty = env.get_state_dim() * args.spawn * 2
+    #all_empty = env.get_state_dim() * args.spawn * 2
     heat_map = helper.heatmap(args.side)
 
     # Print for debugging.
@@ -92,19 +93,19 @@ if __name__ == "__main__":
     data_rewards   = []
     data_heatmaps  = []
 
-    actions = np.zeros(5, dtype=np.uint32)   # This number is the amount of "if" conditions in the reward function.
+    #actions = np.zeros(5, dtype=np.uint32)   # This number is the amount of "if" conditions in the reward function.
 
     # Main program loop.
     print('Episodes\tRewards\tTime (s)')
     start = time.process_time()             # Start the timer.
     # Each episode.
-    curr_reward = np.zeros(args.max_eps_len, dtype=np.int32)
+    # curr_reward = np.zeros(args.max_eps_len, dtype=np.int32)
     for e in range(args.n_episodes):        # Run for some number of episodes.
         env.reset()                         # Reset the enviornment to what it started with originally.
-        state = env.get_state(vector=True, shallow=True)
+        state = env.get_stable(vector=True, shallow=False)
         
         center = 0
-        curr_reward = np.zeros_like(curr_reward)
+        curr_reward = 0
         # Episode duration.
         prev_density = env.alive()
         for i in range(args.max_eps_len):
@@ -118,8 +119,10 @@ if __name__ == "__main__":
             env.toggle_state(toggle_sequence)    # Commit action.
             env.step()                           # Update the simulator's state.
             
+            #print('EPISODE:', e, 'EPSILON:', epsilon, '\tACTION:', center)
+
             # Collect the reward and state and teach the DQN to learn.
-            n_state = env.get_state(vector=True, shallow=False)         # What the agent will see, this can change between state and stable.
+            n_state = env.get_stable(vector=True, shallow=False)         # What the agent will see, this can change between state and stable.
             n_world = env.get_state(vector=True, shallow=False)         # This must ALWAYS be state!
 
             # Reward after congergence, must use stability matrix instead of state space!
@@ -136,13 +139,15 @@ if __name__ == "__main__":
             # Create reward and make the agent learn.
             #print(e)
             #print(f'ACTION, TYPE={center}, {action_weight}')
-            #print('STATE=\n', n_world.reshape(10, 10))
-            #print('STABLE=\n', n_state.reshape(10, 10))
-            #print('PREV_STABLE=\n', prev_state.reshape(10, 10))
+            #print('PREV_STABLE=\n', prev_reward_eval.reshape(10, 10))
+            # print(center)
+            # print('STABLE=\n', n_state.reshape(10, 10))
+            # print('STATE=\n', n_world.reshape(10, 10))
+            # input()
             curr_density = env.alive() / env.get_state_dim()
 
             curr_state_reward = np.sum(env.get_stable(), dtype=np.int32)    # This should match the same thing that prev_reward_eval is.
-            prev_state_reward = np.sum(prev_reward_eval, dtype=np.int32)
+            #prev_state_reward = np.sum(prev_reward_eval, dtype=np.int32)
 
             reward = curr_state_reward
             # if(center == prev_center):                         # Do not place on same spot!
@@ -164,7 +169,7 @@ if __name__ == "__main__":
             #print(env.get_state())
             #print(e, reward, curr_state_reward, prev_state_reward, action_weight)
             learner.step(state, center, reward, n_state)
-            curr_reward[i] = reward
+            curr_reward += reward
             #print('REWARD=', reward)
             #print(np.sum(n_state), np.sum(prev_state), '\n')
             #input()
@@ -174,14 +179,14 @@ if __name__ == "__main__":
             env.update_state(n_world, state)     # Restore the enviornment with the actual next state.
         
         # Update epsilon and moving window reward.
-        moving_window.append(np.mean(curr_reward))
+        moving_window.append(curr_reward / args.max_eps_len)
         epsilon *= epsilon_decay
         heat_map.update(env.get_state())
 
         # Optional print outs.
         if e % args.max_eps_len == 0:
-            print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}\t{actions}')
-            actions = np.zeros_like(actions)
+            print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}\t{epsilon}')
+            #actions = np.zeros_like(actions)
             data_breakdown.append(heat_map.breakdown().T)
             data_evals.append(heat_map.evaluate())
             data_rewards.append(np.mean(moving_window))
@@ -196,7 +201,7 @@ if __name__ == "__main__":
             start = time.process_time()         # Start the timer again for new episode.
 
     # Episodes done, final prints for training and final save data.
-    print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}')    # Final printout of of episode, mean reward, and time duration.
+    print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}\t{epsilon}')    # Final printout of of episode, mean reward, and time duration.
     data_breakdown.append(heat_map.breakdown().T)
     data_evals.append(heat_map.evaluate())
     data_rewards.append(np.mean(moving_window))

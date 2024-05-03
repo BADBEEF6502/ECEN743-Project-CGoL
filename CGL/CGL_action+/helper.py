@@ -51,9 +51,31 @@ def take_action(center, side):
         action.append(right + down)         # Directly diagnoal and down from anchor.
         action_weight = 3
     elif center < single_toggle_threshold:    # Toggle individual cell.
-        center -= block_toggle_threshold   # Shift center back down to actual indexes valid within state space.
-        action.append(center)
-        action_weight = 2
+         center -= block_toggle_threshold   # Shift center back down to actual indexes valid within state space.
+         action.append(center)
+         action_weight = 2
+        # Coordinate system with wrap around.
+        # x = center % side
+        # y = center - x
+        # left = (x + side - 1) % side
+        # right = (x + 1) % side
+        # up = (y + size - side) % size
+        # down = (y + side) % size
+
+        # options = [left + up, x + up, right + up,
+        #           left + y, x + y, right + y,
+        #           left + down, x + down, right + down]
+        
+        # # Random selection whether to place or not.
+
+        # while not action:
+        #     if:
+            
+        #     else:   # Pure Random.
+        #         for i in range(len(options)):
+        #             if np.random.rand() > 0.5:
+        #                 action.append(options[i])
+    
     else:   # Do nothing threshold.
         action.append(size)
         action_weight = 0
