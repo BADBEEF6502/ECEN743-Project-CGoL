@@ -36,7 +36,6 @@ def take_action(center, side):
     action = []
     action_weight = 0
     if center < block_toggle_threshold:   # Place a 2x2 toggle block, anchored in upper left corner.
-        action_weight = 500
         # Coordinate system with wrap around.
         x = center % side
         y = center - x
@@ -50,10 +49,11 @@ def take_action(center, side):
         action.append(right + y)            # Directly right from anchor.
         action.append(x + down)             # Directly underneath anchor.
         action.append(right + down)         # Directly diagnoal and down from anchor.
+        action_weight = 3
     elif center < single_toggle_threshold:    # Toggle individual cell.
         center -= block_toggle_threshold   # Shift center back down to actual indexes valid within state space.
         action.append(center)
-        action_weight = 100
+        action_weight = 2
     else:   # Do nothing threshold.
         action.append(size)
         action_weight = 0

@@ -21,7 +21,7 @@ SIDE              = 10
 CONVERGENCE_LIMIT = 1000
 STATE_DIM         = SIDE ** 2
 ACTION_DIM        = STATE_DIM * 2
-EMPTY_MUL         = 10
+EMPTY_MUL         = 2
 
 # Initalize neural network and enviornment.
 device = torch.device('cuda', index=GPU_INDEX) if torch.cuda.is_available() else torch.device('cpu')
@@ -33,7 +33,7 @@ env = CGL.sim(side=SIDE, gpu=True, gpu_select=GPU_INDEX, spawnStabilityFactor=SP
 
 # Validation.
 print('*** VALIDATION ***')
-state = env.get_stable(vector=True, shallow=False)
+state = env.get_state(vector=True, shallow=False)
 for e in range(MAX_EPS_LEN):
 
     print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', e)
@@ -54,27 +54,26 @@ for e in range(MAX_EPS_LEN):
     else:
         action_taken = f'TOGGLE AT {center}'
     
-    print(env.get_stable())
     print('Action taken:', action_taken)
     print('--- AFTER ACTION ---')
     print_matrix(env.get_state(), ' ')
 
     # Process the action and get the next state (remember NN see's stability matrix).
     env.step() # Update the simulator's state.
-    state = env.get_stable(vector=True, shallow=False)
+    state = env.get_state(vector=True, shallow=False)
 
     print('--- AFTER STEP ---')
     print_matrix(env.get_state(), ' ')
 
 # Validation convergence.
 print('--- CONVERGENCE ---')
-old = env.get_state()
+old = env.get_stable()
 env.step()
 count_down = CONVERGENCE_LIMIT
 while not env.match(old) and count_down:
-        old = env.get_state()
+        old = env.get_stable()
         env.step()
         count_down -= 1
 print_matrix(env.get_state(), ' ')
 
-print(Q.state_dict())
+#print(Q.state_dict())
