@@ -59,7 +59,7 @@ class QNetwork(nn.Module):
     def forward(self, state):
         # If vanishing gradient, try something differentiable.
         # Leaky ReLU? Parametric ReLU and reduce to float16?
-        state = torch.tensor(state, dtype=torch.float16) # OPTIMIZATION: Can change this to float16, but may cause issues and need to adjust network too.
+        state = state.to(torch.float16) # OPTIMIZATION: Can change this to float16, but may cause issues and need to adjust network too.
         q = F.tanh(self.l1(state.cuda()))
         q = F.tanh(self.l2(q))
         q = F.tanh(self.l3(q))

@@ -3,6 +3,7 @@ import time
 import numpy as np
 import argparse
 import pickle
+import uuid
 from collections import deque
 from dqn import DQNAgent
 
@@ -81,7 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("--exp-gpu", action='store_true', help='Put experience replay buffer on GPU for speed, defaults to main memory/CPU.')   # experience replay buffer length
     parser.add_argument("--update-freq", default=4, type=int, help='Update frequency of target network.')                                       # update frequency of target network
     parser.add_argument("--gpu-index", default=0, type=int, help='GPU device to select for neural network and CGL enviornment.')                # GPU index
-    parser.add_argument("--max-esp-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
+    parser.add_argument("--max-eps-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
     parser.add_argument("--net-mul", default=2, type=float, help='Multiplier for hidden layers in neural network.')                             # Multiplier for hidden values in neural network.
     parser.add_argument("--empty-scale", default=0, type=float, help='Used to scale reward regarding empty cells.')                             # Used to scalue up or down the impact of empty cells on reward.
     parser.add_argument("--verbose", action='store_true', help='Print the current state of the system heatmap.')                                # Useful for debugging, print the current state of the system.
@@ -93,6 +94,7 @@ if __name__ == "__main__":
     parser.add_argument("--eval-period", default=10, type=int, help='Used to control evaluation period for data collection.')                   # Modifier for reward function.
     parser.add_argument("--count-down", default=10000, type=int, help='Used as a maximum limit to wait for the system to stabalize.')           # Used for heatmap evaluation and still life performance generation.
     parser.add_argument("--reward-convergence", action='store_true', help='Only compute reward after convergence.')                             # Evaluate reward after convergence.
+    parser.add_argument("--rand-name", action='store_true', help='Used for HPRC applications with same side seed.')                             # HPRC specific parameter.
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1, help='Start value of epsilon.')                                                           # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01, help='End value of epsilon.')                                                            # end value of epsilon
@@ -149,7 +151,7 @@ if __name__ == "__main__":
         curr_reward = []
         # Episode duration.
         prev_density = env.alive()
-        for _ in range(args.max_esp_len):
+        for _ in range(args.max_eps_len):
             # Learner takes action.
             center = learner.select_action(state, epsilon) 
 
@@ -206,9 +208,14 @@ if __name__ == "__main__":
 
     # Episodes done, final prints for training.
     print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}')    # Final printout of of episode, mean reward, and time duration.
-    learner.save(f'{args.side}')  # Save the final state of the learner.
+    name = ''
+    if args.rand_name: # Random name generation for HRPC applications with same side length.
+        name = f'{args.side}_{uuid.uuid4()}'
+    else:
+        name = f'{args.side}'
+    learner.save(name)  # Save the final state of the learner.
     data2save = {'breakdown' : data_breakdown, 'evals' : data_evals, 'rewards' : data_rewards, 'data_heatmaps' : data_heatmaps, 'eval_period' : args.eval_period}
-    with open(f'data_{args.side}.pkl', 'wb') as f:
+    with open(f'data_{name}.pkl', 'wb') as f:
         pickle.dump(data2save, f)
 
 quit()
