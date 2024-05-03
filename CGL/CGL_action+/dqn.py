@@ -43,20 +43,31 @@ class QNetwork(nn.Module):
     """
     Q Network: designed to take state as input and give out Q values of actions as output
     """
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, state_dim, action_dim, net_mul):
         """
             state_dim (int): state dimenssion
             action_dim (int): action dimenssion
         """
         super(QNetwork, self).__init__()
-        self.l1 = nn.Linear(state_dim, action_dim*2)
-        self.l2 = nn.Linear(action_dim*2, action_dim*2)
-        self.l3 = nn.Linear(action_dim*2, action_dim)
+        hidden = int(action_dim * net_mul)
+        self.l1 = nn.Linear(state_dim, hidden)
+        self.l2 = nn.Linear(hidden, hidden)
+        # self.l3 = nn.Linear(hidden, hidden)
+        # self.l4 = nn.Linear(hidden, hidden)
+        self.l3 = nn.Linear(hidden, action_dim)
         
     def forward(self, state):
-        state = state.to(torch.float32)     # OPTIMIZATION: Can change this to float16, but may cause issues and need to adjust network too.
+        # If vanishing gradient, try something differentiable.
+        # Leaky ReLU? Parametric ReLU and reduce to float16?
+        state = state.to(torch.float32) # OPTIMIZATION: Can change this to float16, but may cause issues and need to adjust network too.
+        #state = F.normalize(state, p=2, dim=1)
+
+        state = (state - torch.mean(state)) / torch.std(state)
+
         q = F.relu(self.l1(state.cuda()))
         q = F.relu(self.l2(q))
+        # q = F.relu(self.l3(q))
+        # q = F.relu(self.l4(q))
         return self.l3(q)
 
 class DQNAgent():
@@ -72,7 +83,8 @@ class DQNAgent():
      max_size=int(1e5),
      batch_size=64,
      gpu_index=0,
-     seed=0
+     seed=0,
+     net_mul=2
      ):
         """
             state_size (int): dimension of each state
@@ -86,6 +98,7 @@ class DQNAgent():
             batch_size (int): training batch size
             gpu_index (int): GPU used for training
             seed (int): init some random seed for agent.
+            net_mul (int): init neural network hidden layer multiplier
         """
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -94,12 +107,12 @@ class DQNAgent():
         self.lr = lr
         self.update_freq = update_freq
         self.batch_size = batch_size
-        np.random.seed(seed)
+        np.random.seed(seed) # Used for consistency so the DQN's actions are consistent.
         self.device = torch.device('cuda', index=gpu_index) if torch.cuda.is_available() else torch.device('cpu')
 
         # Setting up the NNs
-        self.Q = QNetwork(state_dim, action_dim).to(self.device)
-        self.Q_target = QNetwork(state_dim, action_dim).to(self.device)
+        self.Q         = QNetwork(state_dim, action_dim, net_mul).to(self.device)
+        self.Q_target  = QNetwork(state_dim, action_dim, net_mul).to(self.device)
         self.optimizer = optim.Adam(self.Q.parameters(), lr=self.lr)
 
         # Experience Replay Buffer
@@ -127,9 +140,9 @@ class DQNAgent():
     def select_action(self, state, epsilon):
         # Epsilon greedy exploration.
         s = torch.tensor(state, dtype=torch.int8) # Must convert numpy arrays to torch friendly tensors. Tho, these are read-only.
-        a = self.Q.forward(s).argmax().cpu()
+        a = int(self.Q.forward(s).argmax())
         if np.random.random_sample() < epsilon:
-            while a == self.Q.forward(s).argmax().cpu():
+            while a == int(self.Q.forward(s).argmax()):
                 a = np.random.randint(self.action_dim)
         return np.int32(a)                        # Action is the index the agent want's to toggle from dead to alive or visa versa. Torch cannot handle uint32!
 
