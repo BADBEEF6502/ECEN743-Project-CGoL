@@ -75,11 +75,11 @@ for e in range(MAX_EPS_LEN):
 
 # Validation convergence.
 print('--- CONVERGENCE ---')
-old = env.get_stable()
+old = env.get_state()
 env.step()
 count_down = CONVERGENCE_LIMIT
 while not env.match(old) and count_down:
-        old = env.get_stable()
+        old = env.get_state()
         env.step()
         count_down -= 1
 print_matrix(env.get_state(), ' ')

@@ -128,13 +128,15 @@ if __name__ == "__main__":
             # Reward after congergence, must use stability matrix instead of state space!
             # Always use stable here, not state!
             if args.reward_convergence:
-                old = env.get_stable()
+                env.empty = 0
+                old = env.get_state()
                 env.step()
                 convergence_cycles = 0
                 while not env.match(old) and convergence_cycles < args.count_down:
-                        old = env.get_stable()
+                        old = env.get_state()
                         env.step()
                         convergence_cycles += 1
+                env.empty = args.empty_state
 
             # Create reward and make the agent learn.
             #print(e)

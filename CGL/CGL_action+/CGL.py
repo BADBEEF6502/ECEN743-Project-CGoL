@@ -291,7 +291,7 @@ class sim:
 
     # This will compare some input world state with the current state and return true if they match.
     def match(self, terminalState):
-        return (self.stable==terminalState.flatten()).all()
+        return (self.world==terminalState.flatten()).all()
 
     # This will return a breakdown or value count for stability factor matrix.
     def breakdown_stable(self):
