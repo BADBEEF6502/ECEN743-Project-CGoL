@@ -368,12 +368,14 @@ class sim:
         return density
 
     # Expects a new state the same dimensions and side length of the original state. This is an alternative to toggling specific states on and off.
-    def update_state(self, newState, side):
+    def update_state(self, newState, newStability):
         temp = newState.flatten().astype(np.uint8)
-        if temp.size != self.size or self.side != side:
+        temp2 = newStability.flatten().astype(np.int8)
+        if temp.size != self.size or len(temp) != len(self.world):
             raise ValueError(f'The new state must have the same size and side as the original state!\nWas given size={temp.size} and side={side} but was expecting size={self.size} and side={self.side}.')
         else:
             self.world = np.copy(temp)
+            self.stable = np.copy(temp2)
 
     # This will toggle specific states on and off given a list of indexes as indx.
     # Each indx is a cell location as 1D vector.

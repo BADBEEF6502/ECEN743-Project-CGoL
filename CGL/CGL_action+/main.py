@@ -150,14 +150,17 @@ if __name__ == "__main__":
         # Episode duration.
         prev_density = env.alive()
         for _ in range(args.max_esp_len):
+            # Learner takes action.
             center = learner.select_action(state, epsilon) 
 
+            # Have the action impact the state.
             toggle_sequence = take_action(center, args.side)
             env.toggle_state(toggle_sequence)    # Commit action.
             env.step()                           # Update the simulator's state.
-
+            
             # Collect the reward and state and teach the DQN to learn.
             n_state = env.get_stable(vector=True, shallow=True)
+            n_world = env.get_state(vector=True, shallow=True)
 
             # Reward after congergence.
             if args.reward_convergence:
@@ -177,7 +180,8 @@ if __name__ == "__main__":
             # Get next state and current reward.
             state = n_state
             curr_reward.append(reward)
-
+            env.update_state(n_world, state)     # Restore the enviornment with the actual next state.
+        
         # Update epsilon and moving window reward.
         moving_window.append(np.mean(curr_reward))
         epsilon = epsilon * epsilon_decay
