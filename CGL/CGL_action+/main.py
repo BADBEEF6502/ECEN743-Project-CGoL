@@ -4,65 +4,10 @@ import numpy as np
 import argparse
 import pickle
 import uuid
+import helper
 from collections import deque
 from dqn import DQNAgent
-
-class heatmap:
-    def __init__(self, side):
-        self.heat_map_matrix = np.zeros((side, side), dtype=np.uint32)
-    
-    def clear(self):
-        self.heat_map_matrix = np.zeros_like(self.heat_map_matrix)
-
-    def get_heatmap(self):
-        return self.heat_map_matrix
-    
-    def breakdown(self):
-        unique, counts = np.unique(self.heat_map_matrix, return_counts=True)
-        breakdown = np.asarray((unique, counts))
-        return breakdown
-    
-    def evaluate(self):
-        return np.sum(self.heat_map_matrix, dtype=np.uint32)
-    
-    def update(self, state):
-        self.heat_map_matrix += state
-
-# Print a pretty state matrix.
-def print_matrix(state, joinStr):
-#    state_str = np.where(state == 1, '$', '-')
-    for row in state:
-        print(joinStr.join(map(str, row)))
-
-# Take action between single toggle or 2x2 block.
-def take_action(center, side):
-    size = side ** 2
-    single_toggle_threshold = side ** 2
-    block_toggle_threshold  = single_toggle_threshold * 2
-
-    action = []
-    if center < single_toggle_threshold:    # Toggle individual cell.
-        action.append(center)
-    elif center < block_toggle_threshold:   # Place a 2x2 toggle block, anchored in upper left corner.
-
-        center -= single_toggle_threshold   # Shift center back down to actual indexes valid within state space.
-
-        # Coordinate system with wrap around.
-        x = center % side
-        y = center - x
-        left = (x + side - 1) % side
-        right = (x + 1) % side
-        up = (y + size - side) % size
-        down = (y + side) % size
-
-        # Place the 2x2 block anchored in upper left corner.
-        action.append(x + y)                # "Center" is top left anchor.
-        action.append(right + y)            # Directly right from anchor.
-        action.append(x + down)             # Directly underneath anchor.
-        action.append(right + down)         # Directly diagnoal and down from anchor.
-    else:   # Do nothing threshold.
-        action.append(side ** 2)
-    return action
+#from validate import validation
 
 if __name__ == "__main__":
     # HyperParameters For DQN
@@ -84,7 +29,7 @@ if __name__ == "__main__":
     parser.add_argument("--gpu-index", default=0, type=int, help='GPU device to select for neural network and CGL enviornment.')                # GPU index
     parser.add_argument("--max-eps-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
     parser.add_argument("--net-mul", default=2, type=float, help='Multiplier for hidden layers in neural network.')                             # Multiplier for hidden values in neural network.
-    parser.add_argument("--empty-scale", default=0, type=float, help='Used to scale reward regarding empty cells.')                             # Used to scalue up or down the impact of empty cells on reward.
+    parser.add_argument("--empty-state", default=0, type=int, help='Used to scale reward regarding empty cells.')                               # Used to scalue up or down the impact of empty cells on reward.
     parser.add_argument("--verbose", action='store_true', help='Print the current state of the system heatmap.')                                # Useful for debugging, print the current state of the system.
     parser.add_argument("--spawn", default=-2, type=int, help='Spawn stability factor.')                                                        # Used to determine at what value the cells spawn.
     parser.add_argument("--stable", default=2, type=int, help='Max stability factor.')                                                          # Used to determine when maximum stability is achieved.
@@ -101,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument("--epsilon-decay", default=0.9965, help='Decay value of epsilon.')                                                      # decay value of epsilon
     args = parser.parse_args()
 
-    env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable, runBlank=args.run_blank)
+    env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable, runBlank=args.run_blank, emptyMul=args.empty_state)
     action_space = (args.side ** 2) * 2 # Times 2 for blocks and single toggles. #(env.get_side() - 1) ** 2
 
     # Print list of inputs for debugging.
@@ -109,7 +54,7 @@ if __name__ == "__main__":
         print(f'{arg}\t{getattr(args, arg)}')
 
     # Print the starting state.
-    print_matrix(env.get_state(), ' ')
+    helper.print_matrix(env.get_stable(), ' ')
 
     kwargs = {
         "state_dim":    env.get_state_dim(),
@@ -132,7 +77,8 @@ if __name__ == "__main__":
     epsilon_decay = args.epsilon_decay
     moving_window = deque(maxlen=args.eval_period)
     max_density = env.get_max_density()
-    heat_map = heatmap(args.side)
+    all_empty = env.get_state_dim() * args.spawn * 2
+    heat_map = helper.heatmap(args.side)
 
     # Store's data for visualizaitons.
     data_breakdown = []
@@ -156,28 +102,47 @@ if __name__ == "__main__":
             center = learner.select_action(state, epsilon) 
 
             # Have the action impact the state.
-            toggle_sequence = take_action(center, args.side)
+            toggle_sequence, action_weight = helper.take_action(center, args.side)
+            prev_state = env.get_stable(vector=True, shallow=False)
             env.toggle_state(toggle_sequence)    # Commit action.
             env.step()                           # Update the simulator's state.
             
             # Collect the reward and state and teach the DQN to learn.
-            n_state = env.get_stable(vector=True, shallow=True)
-            n_world = env.get_state(vector=True, shallow=True)
+            n_state = env.get_stable(vector=True, shallow=False)
+            n_world = env.get_state(vector=True, shallow=False)
 
-            # Reward after congergence.
+            # Reward after congergence, must use stability matrix instead of state space!
             if args.reward_convergence:
-                old = env.get_state()
+                old = env.get_stable()
                 env.step()
                 count_down = args.count_down
                 while not env.match(old) and count_down:
-                        old = env.get_state()
+                        old = env.get_stable()
                         env.step()
                         count_down -= 1
 
             # Create reward and make the agent learn.
+            #print(e)
+            #print(f'ACTION, TYPE={center}, {action_weight}')
+            #print('STATE=\n', n_world.reshape(10, 10))
+            #print('STABLE=\n', n_state.reshape(10, 10))
+            #print('PREV_STABLE=\n', prev_state.reshape(10, 10))
             curr_density = env.alive() / env.get_state_dim()
-            reward = env.reward(args.empty_scale, args.reward_exp, curr_density, useDensity=False)
+
+            curr_state_reward = np.sum(n_state)
+            prev_state_reward = np.sum(prev_state)
+            if curr_state_reward == all_empty and prev_state_reward == all_empty:
+                reward = -1000
+            if curr_state_reward < prev_state_reward:
+                reward = -2000
+            if curr_state_reward == prev_state_reward and action_weight == 0:   # Do nothing with a positive reward, action_weight = 0 is special meaning "do nothing".
+                reward = curr_state_reward
+            else:
+                reward = curr_state_reward + (curr_state_reward - prev_state_reward) * action_weight #env.reward(args.empty_scale, args.reward_exp, curr_density, useDensity=False)
             learner.step(state, center, reward, n_state)
+            #print('REWARD=', reward)
+            #print(np.sum(n_state), np.sum(prev_state), '\n')
+           #input()
 
             # Get next state and current reward.
             state = n_state
@@ -199,15 +164,21 @@ if __name__ == "__main__":
             data_heatmaps.append(heat_map.get_heatmap())
 
             if args.verbose:
-                print_matrix(heat_map.get_heatmap(), ' ')
+                helper.print_matrix(heat_map.get_heatmap(), ' ')
                 print(heat_map.evaluate())
-                print_matrix(heat_map.breakdown(), '\t')
+                helper.print_matrix(heat_map.breakdown(), '\t')
             heat_map.clear()
 
             start = time.process_time()         # Start the timer again for new episode.
 
-    # Episodes done, final prints for training.
+    # Episodes done, final prints for training and final save data.
     print(f'{args.n_episodes}\t{np.mean(moving_window)}\t{time.process_time() - start}')    # Final printout of of episode, mean reward, and time duration.
+    data_breakdown.append(heat_map.breakdown().T)
+    data_evals.append(heat_map.evaluate())
+    data_rewards.append(np.mean(moving_window))
+    data_heatmaps.append(heat_map.get_heatmap())
+
+    # Save the data files.
     name = ''
     if args.rand_name: # Random name generation for HRPC applications with same side length.
         name = f'{args.side}_{uuid.uuid4()}'
@@ -217,5 +188,8 @@ if __name__ == "__main__":
     data2save = {'breakdown' : data_breakdown, 'evals' : data_evals, 'rewards' : data_rewards, 'data_heatmaps' : data_heatmaps, 'eval_period' : args.eval_period}
     with open(f'data_{name}.pkl', 'wb') as f:
         pickle.dump(data2save, f)
+
+    # Run validation check.
+    #validation(learner.Q)
 
 quit()
