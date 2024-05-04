@@ -166,7 +166,6 @@ class DQNAgent():
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        self.target_update(self.Q, self.Q_target, self.tau)
         
     # Update the target network.
     def target_update(self, Q, Q_target, tau):

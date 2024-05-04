@@ -139,12 +139,15 @@ if __name__ == "__main__":
             # Evaluate reward.
             #reward = int(-100 * (1 - (env.alive() / max_density)))  # 100 gives 3 integer places of precision.
 
-            if toggle_sequence[0] == (args.side ** 2):
-                print('do nothing')
-                break
+            # (-1 + (env.alive() / (max_density // 2)))
 
-            reward = 16 * 2 ** (-(isGood - 4)**2) - 9   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
+            # if toggle_sequence[0] == (args.side ** 2):
+            #     print('do nothing')
+            #     break
+
+            # reward = 16 * 2 ** (-(isGood - 4)**2) - 9   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
             #print(isGood, reward)
+            reward = 0
             learner.step(state, center, reward, n_state)
             curr_reward += reward
 
@@ -163,28 +166,30 @@ if __name__ == "__main__":
                 env.step()
                 convergence_cycles += 1
 
-        cash_out = 0
-        if eps_counter == args.max_eps_len or env.alive() == 0:
-            cash_out = -1000
-        elif eps_counter < args.max_eps_len:                                    # End state that has converged with high likleyhood still life.
-            cash_out = 1000
+        # cash_out = 0
+        # if eps_counter == args.max_eps_len or env.alive() == 0:
+        #     cash_out = -1000
+        # elif eps_counter < args.max_eps_len:                                    # End state that has converged with high likleyhood still life.
+        #     cash_out = 1000
+        #     still_life_count += 1
+        #     still_life_avg += env.alive()
+        # else:
+        #     ValueError('OMG!')
+
+
+
+        if np.sum(env.get_state()) == 0:            # Grid zeros out!
+            cash_out = -np.abs(max_density * args.empty_min)
+        elif convergence_cycles == args.count_down: # Grid never stabalizes, oscillator.
+            cash_out = -np.abs(max_density * args.empty_min)
+        elif env.match(old):                                       # Convergence with still life.
+            cash_out = env.alive() * int(np.floor(np.log2(args.side ** 2))) * max_density
             still_life_count += 1
             still_life_avg += env.alive()
         else:
             ValueError('OMG!')
 
         learner.step(state, center, cash_out, env.get_state(vector=True))
-
-        # if np.sum(env.get_state()) == 0:            # Grid zeros out!
-        #     cash_out = -np.abs(max_density * args.empty_min)
-        # elif convergence_cycles == args.count_down: # Grid never stabalizes, oscillator.
-        #     cash_out = -np.abs(max_density * args.empty_min)
-        # elif env.match(old):                                       # Convergence with still life.
-        #     cash_out = env.alive() * int(np.floor(np.log2(args.side ** 2))) * max_density
-        #     still_life_count += 1
-        #     still_life_avg += env.alive()
-        # else:
-        #     ValueError('OMG!')
 
         # Update epsilon and moving window reward.
         moving_window.append((curr_reward + cash_out) / (eps_counter + 1))
