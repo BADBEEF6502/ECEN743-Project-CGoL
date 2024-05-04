@@ -12,9 +12,10 @@ def print_matrix(state, joinStr):
 
 #def validation(Q):
 # Constants used for processing, must be same as Q network being loaded.
-SPAWN_FACTOR      = -2
-STABLE_FACTOR     = 2
+SPAWN_FACTOR      = 0
+STABLE_FACTOR     = 100
 EMPTY_MUL         = -1
+EMPTY_MIN         = -10
 MAX_EPS_LEN       = 1000
 NET_MUL           = 2
 GPU_INDEX         = 0
@@ -27,13 +28,13 @@ ACTION_DIM        = STATE_DIM
 device = torch.device('cuda', index=GPU_INDEX) if torch.cuda.is_available() else torch.device('cpu')
 Q = dqn.QNetwork(STATE_DIM, ACTION_DIM, NET_MUL).to(device)
 Q.load_state_dict(torch.load(f'Q_{SIDE}.pth'))
-#Q.eval()
+Q.eval()
 
-env = CGL.sim(side=SIDE, gpu=True, gpu_select=GPU_INDEX, spawnStabilityFactor=SPAWN_FACTOR, stableStabilityFactor=STABLE_FACTOR, runBlank=True, empty=EMPTY_MUL)
+env = CGL.sim(side=SIDE, seed=100, gpu=True, gpu_select=GPU_INDEX, spawnStabilityFactor=SPAWN_FACTOR, stableStabilityFactor=STABLE_FACTOR, runBlank=False, empty=EMPTY_MUL, empty_min=EMPTY_MIN)
 
 # Validation.
 print('*** VALIDATION ***')
-state = env.get_stable(vector=True, shallow=False)
+state = env.get_state(vector=True, shallow=False)
 for e in range(MAX_EPS_LEN):
 
     print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', e)
@@ -41,10 +42,9 @@ for e in range(MAX_EPS_LEN):
     print_matrix(env.get_state(), ' ')
 
     state = torch.from_numpy(state)
- #   old = Q.forward(state)
     center = int(Q.forward(state).argmax())
 
-    toggle_sequence, action_weight = helper.take_action(center, SIDE)
+    toggle_sequence, action_weight = helper.take_action(center, SIDE, state)
     env.toggle_state(toggle_sequence)    # Commit action.
 
     action_taken = ''
@@ -61,14 +61,7 @@ for e in range(MAX_EPS_LEN):
 
     # Process the action and get the next state (remember NN see's stability matrix).
     env.step() # Update the simulator's state.
-    state = env.get_stable(vector=True, shallow=False)
-
-#    state = torch.from_numpy(state)
-#    new = Q.forward(state)
-    # print(old)
-    # print(new)
-    # print('ARE THEY THE SAME?', torch.eq(old, new))
-    # quit()
+    state = env.get_state(vector=True, shallow=False)
 
     print('--- AFTER STEP ---')
     print_matrix(env.get_state(), ' ')
@@ -83,5 +76,6 @@ while not env.match(old) and count_down:
         env.step()
         count_down -= 1
 print_matrix(env.get_state(), ' ')
+#        input()
 
 #print(Q.state_dict())

@@ -52,7 +52,7 @@ if GPU_CAPABLE:
 
 class sim:
     # Default to no state (1D or 2D numpy array for CGoL), side is the side length of the square, seed is used for random state generation, gpu chooses whether to use GPU or not, device selects the GPU device to use.
-    def __init__(self, state=None, side=8, seed=8, gpu=False, gpu_select=0, warp=8, spawnStabilityFactor=-1, stableStabilityFactor=1, runBlank=False, empty=0):
+    def __init__(self, state=None, side=8, seed=8, gpu=False, gpu_select=0, warp=8, spawnStabilityFactor=-1, stableStabilityFactor=1, runBlank=False, empty=0, empty_min=-128):
         # Validate input.
         if not isinstance(state, np.ndarray) and state is not None and not isinstance(state, list):
             raise TypeError('state variable must be a list or Numpy ndarray!')
@@ -78,6 +78,8 @@ class sim:
             raise ValueError('warp must be positive integer!')
         if not isinstance(empty, int):
             raise TypeError('empty must be integer!')
+        if not isinstance(empty_min, int):
+            raise TypeError('empty_min must be integer!')
         if not isinstance(spawnStabilityFactor, int):
             raise TypeError('spawnStabilityFactor must be an integer!')
         if not isinstance(stableStabilityFactor, int):
@@ -90,6 +92,7 @@ class sim:
         self.side = 0
         self.count = 0
         self.empty = empty
+        self.empty_min = empty_min
         self.seed = seed
         self.spawnStabilityFactor = spawnStabilityFactor
         self.stableStabilityFactor = stableStabilityFactor
@@ -156,7 +159,7 @@ class sim:
             cudaCode = SourceModule("""
             __global__ void run(const unsigned char* world, unsigned char* result, char* stable, const unsigned int side, const unsigned int size)
             {{
-                for (unsigned int cellLoc = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+                for(unsigned int cellLoc = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
                     cellLoc < size;
                     cellLoc += blockDim.x * gridDim.x)
                 {{
@@ -178,18 +181,19 @@ class sim:
                     unsigned char prevState = world[cellLoc];
                     unsigned char currState = (neighbors == 3) || (neighbors == 2 && prevState);
                     result[cellLoc] = currState;
-   
+
                     /* Stability function evaluation.
                         newStabilityScore(cellTransition) =  
                             1. alive --> alive do min(stabilityScore + 1, STABLE)
                             2. dead  --> alive do SPAWN
                             3. otherwise       do SPAWN * EMPTY_MUL */
-                    unsigned char isMax = stable[cellLoc] == {};
+                    char isMax = stable[cellLoc] == {}; /* Ceiling. */
+                    char isMin = stable[cellLoc] == {}; /* Floor. */
                     char stabilityValue = stable[cellLoc];
-                    stable[cellLoc] = ((currState && prevState) * ((!isMax * (stabilityValue + 1)) | (isMax * stabilityValue))) | ((currState && !prevState) * {}) | (!currState * (stabilityValue + {}));
+                    stable[cellLoc] = ((currState && prevState) * ((!isMax * (stabilityValue + 1)) | (isMax * stabilityValue))) | ((currState && !prevState) * {}) | (!isMin * !currState * (stabilityValue - 1)) | (isMin * !currState * stabilityValue);
                 }}
             }}
-            """.format(self.stableStabilityFactor, self.spawnStabilityFactor, self.empty))
+            """.format(self.stableStabilityFactor, self.empty_min, self.spawnStabilityFactor))
 
             # Originally used inverse and add 1 for mask, but switched to bit shift for efficiency.
             self.run_gpu = cudaCode.get_function('run')
@@ -249,7 +253,7 @@ class sim:
             elif(currState and (not prevState)):
                 self.stable[cellLoc] = self.spawnStabilityFactor
             else:
-                self.stable[cellLoc] += self.empty
+                self.stable[cellLoc] = np.minimum(self.stable[cellLoc] + self.empty, self.empty_min)    # To combat rollover.
         self.world = np.copy(self.temp)
 
 # --- SIMULATOR ---
@@ -260,28 +264,13 @@ class sim:
             self.__step_state_gpu()
         else:
             self.__step_state_cpu()
-
-    # Returns the total stable of the system - NOTE: IS SIGNED!
-    def reward(self, reward_exp=0, curr_density=0, useDensity=False):
-        reward = 0
-        densityReward = 0
-        base = np.add.reduce(self.stable, dtype=np.int32)
-        
-        # Exponential reward modifier to reduce destorying cells.
-        if reward_exp != 0:
-            densityReward = base * reward_exp ** -(self.max_density - curr_density)
-
-        # Use density or stability matrix.
-        if not useDensity:
-            reward = base + densityReward
-        else:
-            reward = np.int64(self.alive())     # This is done for torch tensors.
-
-        return reward
     
     # Returns the count of alive cells in the system.
     def alive(self):
-        return np.add.reduce(self.world, dtype=np.uint32) # Faster than np.sum() as of 7 APR 2024.
+        return np.add.reduce(self.world, dtype=np.int32) # Faster than np.sum() as of 7 APR 2024, int32 due to torch.
+    
+    def stability(self):
+        return np.add.reduce(self.stable, dtype=np.int32) # Faster than np.sum() as of 7 APR 2024, int32 due to torch.
     
     # Will reset the enviornment to the original state.
     # When the CGL simulation is created, it already sets the seed for the system.

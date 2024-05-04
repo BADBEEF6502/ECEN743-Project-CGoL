@@ -17,7 +17,7 @@ class ExperienceReplay:
         self.state = torch.zeros((max_size, state_dim), dtype=torch.int8).to(self.device)       # State is stability factor matrix of the system.
         self.action = torch.zeros((max_size, action_dim), dtype=torch.int32).to(self.device)    # Action is the index of the cell to modify.
         self.next_state = torch.zeros((max_size, state_dim), dtype=torch.int8).to(self.device)  # Next state is next stability factor matrix of the system.
-        self.reward = torch.zeros((max_size, 1), dtype=torch.int32).to(self.device)             # The returned rewards or the total stability factor of the system.
+        self.reward = torch.zeros((max_size, 1), dtype=torch.float32).to(self.device)             # The returned rewards or the total stability factor of the system.
         self.batch_size = batch_size
 
     # Add data to experience replay buffer.
@@ -52,9 +52,9 @@ class QNetwork(nn.Module):
         hidden = int(action_dim * net_mul)
         self.l1 = nn.Linear(state_dim, hidden)
         self.l2 = nn.Linear(hidden, hidden)
-        # self.l3 = nn.Linear(hidden, hidden)
-        # self.l4 = nn.Linear(hidden, hidden)
-        self.l3 = nn.Linear(hidden, action_dim)
+        self.l3 = nn.Linear(hidden, hidden)
+        self.l4 = nn.Linear(hidden, hidden)
+        self.l5 = nn.Linear(hidden, action_dim)
         
     def forward(self, state):
         # If vanishing gradient, try something differentiable.
@@ -66,9 +66,9 @@ class QNetwork(nn.Module):
 
         q = F.relu(self.l1(state.cuda()))
         q = F.relu(self.l2(q))
-        # q = F.relu(self.l3(q))
-        # q = F.relu(self.l4(q))
-        return self.l3(q)
+        q = F.relu(self.l3(q))
+        q = F.relu(self.l4(q))
+        return self.l5(q)
 
 class DQNAgent():
 

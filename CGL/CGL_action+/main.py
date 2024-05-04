@@ -21,8 +21,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", default=0, type=int, help='Seeds for randomness.')                                                            # Randomness seeds.
     parser.add_argument("--n-episodes", default=2000, type=int, help='Maximum number of training episodes.')                                    # maximum number of training episodes
     parser.add_argument("--batch-size", default=64, type=int, help='Training batch size.')                                                      # training batch size
-    parser.add_argument("--discount", default=0.99, type=float, help='Discount factor.')                                                                    # discount factor
-    parser.add_argument("--lr", default=0.001, type=float, help='Learning rate.')                                                                            # learning rate
+    parser.add_argument("--discount", default=0.99, type=float, help='Discount factor.')                                                        # discount factor
+    parser.add_argument("--lr", default=0.001, type=float, help='Learning rate.')                                                               # learning rate
     parser.add_argument("--tau", default=0.001, help='Tau is softness parameter for updating the target network.')                              # soft update of target network
     parser.add_argument("--exp-size", default=1000,type=int, help='Experience replay buffer length')                                            # experience replay buffer length
     parser.add_argument("--exp-gpu", action='store_true', help='Put experience replay buffer on GPU for speed, defaults to main memory/CPU.')   # experience replay buffer length
@@ -31,31 +31,32 @@ if __name__ == "__main__":
     parser.add_argument("--max-eps-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
     parser.add_argument("--net-mul", default=2, type=float, help='Multiplier for hidden layers in neural network.')                             # Multiplier for hidden values in neural network.
     parser.add_argument("--empty-state", default=0, type=int, help='Used to scale reward regarding empty cells.')                               # Used to scalue up or down the impact of empty cells on reward.
+    parser.add_argument("--empty-min", default=-128, type=int, help='Used as floor value for empty cells.')                                     # Used to scalue up or down the impact of empty cells on reward.
     parser.add_argument("--verbose", action='store_true', help='Print the current state of the system heatmap.')                                # Useful for debugging, print the current state of the system.
     parser.add_argument("--spawn", default=-2, type=int, help='Spawn stability factor.')                                                        # Used to determine at what value the cells spawn.
     parser.add_argument("--stable", default=2, type=int, help='Max stability factor.')                                                          # Used to determine when maximum stability is achieved.
     parser.add_argument("--cpu", action='store_true', help='Force CGL to use CPU.')                                                             # Used for non-gpu systems.
     parser.add_argument("--run-blank", action='store_true', help="Initialize a blank enviornment, override's seed for enviornment.")            # Used for debugging.
     parser.add_argument("--reward-exp", default=0, type=float, help='Exponent used to control reward function.')                                # Modifier for reward function.
-#    parser.add_argument("--eval-period", default=10, type=int, help='Used to control evaluation period for data collection.')                   # Modifier for reward function.
+#    parser.add_argument("--eval-period", default=10, type=int, help='Used to control evaluation period for data collection.')                  # Modifier for reward function.
     parser.add_argument("--count-down", default=10000, type=int, help='Used as a maximum limit to wait for the system to stabalize.')           # Used for heatmap evaluation and still life performance generation.
     parser.add_argument("--reward-convergence", action='store_true', help='Only compute reward after convergence.')                             # Evaluate reward after convergence.
     parser.add_argument("--rand-name", action='store_true', help='Used for HPRC applications with same side seed.')                             # HPRC specific parameter.
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1, help='Start value of epsilon.')                                                           # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01, help='End value of epsilon.')                                                            # end value of epsilon
-    parser.add_argument("--epsilon-decay", default=0.9965, help='Decay value of epsilon.')                                                      # decay value of epsilon
+    parser.add_argument("--epsilon-decay", default=0.995, help='Decay value of epsilon.')                                                      # decay value of epsilon
     args = parser.parse_args()
 
-    env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable, runBlank=args.run_blank, empty=args.empty_state)
-    action_space = (args.side ** 2) * 2 # Times 2 for blocks and single toggles. #(env.get_side() - 1) ** 2
+    env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable, runBlank=args.run_blank, empty=args.empty_state, empty_min=args.empty_min)
+    action_space = (args.side ** 2) # Times 2 for blocks and single toggles. #(env.get_side() - 1) ** 2
 
     # Print list of inputs for debugging.
     for arg in vars(args):
         print(f'{arg}\t{getattr(args, arg)}')
 
     # Print the starting state.
-    helper.print_matrix(env.get_stable(), ' ')
+    helper.print_matrix(env.get_state(), ' ')
 
     kwargs = {
         "state_dim":    env.get_state_dim(),
@@ -78,7 +79,6 @@ if __name__ == "__main__":
     epsilon_decay = args.epsilon_decay
     moving_window = deque(maxlen=args.max_eps_len)
     max_density = env.get_max_density()
-    #all_empty = env.get_state_dim() * args.spawn * 2
     heat_map = helper.heatmap(args.side)
 
     # Print for debugging.
@@ -93,101 +93,109 @@ if __name__ == "__main__":
     data_rewards   = []
     data_heatmaps  = []
 
-    #actions = np.zeros(5, dtype=np.uint32)   # This number is the amount of "if" conditions in the reward function.
-
     # Main program loop.
+    print(f'Max density of side {args.side} is {max_density}.')
     print('Episodes\tRewards\tTime (s)')
     start = time.process_time()             # Start the timer.
     # Each episode.
     # curr_reward = np.zeros(args.max_eps_len, dtype=np.int32)
+    still_life_count = 0
+    still_life_avg = 0
     for e in range(args.n_episodes):        # Run for some number of episodes.
         env.reset()                         # Reset the enviornment to what it started with originally.
-        state = env.get_stable(vector=True, shallow=False)
+        state = env.get_state(vector=True, shallow=False)
         
         center = 0
         curr_reward = 0
+        eps_counter = 0
         # Episode duration.
-        prev_density = env.alive()
-        for i in range(args.max_eps_len):
-            # Update the previous states.
-            prev_center = center
-            prev_reward_eval = env.get_stable(vector=True, shallow=False)
-
+        while env.alive() < int(max_density * 0.8) and eps_counter < args.max_eps_len:
             # Have the action impact the state.
             center = learner.select_action(state, epsilon) 
-            toggle_sequence, action_weight = helper.take_action(center, args.side)
+            toggle_sequence, isGood = helper.take_action(center, args.side, state)
+
             env.toggle_state(toggle_sequence)    # Commit action.
             env.step()                           # Update the simulator's state.
-            
-            #print('EPISODE:', e, 'EPSILON:', epsilon, '\tACTION:', center)
 
             # Collect the reward and state and teach the DQN to learn.
-            n_state = env.get_stable(vector=True, shallow=False)         # What the agent will see, this can change between state and stable.
+            n_state = env.get_state(vector=True, shallow=False)         # What the agent will see, this can change between state and stable.
             n_world = env.get_state(vector=True, shallow=False)         # This must ALWAYS be state!
 
             # Reward after congergence, must use stability matrix instead of state space!
             # Always use stable here, not state!
-            if args.reward_convergence:
-                env.empty = 0
-                old = env.get_state()
-                env.step()
-                convergence_cycles = 0
-                while not env.match(old) and convergence_cycles < args.count_down:
-                        old = env.get_state()
-                        env.step()
-                        convergence_cycles += 1
-                env.empty = args.empty_state
+            # Would need to use get_stable() and zero out in CGL and here all non-alive cells since they will count down to fix!
+            # if args.reward_convergence:
+            #     old = env.get_stable()
+            #     env.step()
+            #     convergence_cycles = 0
+            #     while not env.match(old) and convergence_cycles < args.count_down:
+            #             old = env.get_stable()
+            #             env.step()
+            #             convergence_cycles += 1
 
             # Create reward and make the agent learn.
-            #print(e)
-            #print(f'ACTION, TYPE={center}, {action_weight}')
-            #print('PREV_STABLE=\n', prev_reward_eval.reshape(10, 10))
-            # print(center)
-            # print('STABLE=\n', n_state.reshape(10, 10))
-            # print('STATE=\n', n_world.reshape(10, 10))
-            # input()
-            curr_density = env.alive() / env.get_state_dim()
+            #curr_density = env.alive() / max_density
 
-            curr_state_reward = np.sum(env.get_stable(), dtype=np.int32)    # This should match the same thing that prev_reward_eval is.
-            #prev_state_reward = np.sum(prev_reward_eval, dtype=np.int32)
+            # Evaluate reward.
+            #reward = int(-100 * (1 - (env.alive() / max_density)))  # 100 gives 3 integer places of precision.
 
-            reward = curr_state_reward
-            # if(center == prev_center):                         # Do not place on same spot!
-            #     reward = -100
-            #     actions[0] += 1
-            # elif(curr_state_reward == all_empty):              # Empty grid is bad, use all_empty if reward is being evaluated on stable else use 0 for state.
-            #     reward = -10
-            #     actions[1] += 1
-            # elif(curr_state_reward < prev_state_reward):       # Do not decrease the reward!
-            #     reward = -1
-            #     actions[2] += 1
-            # elif curr_state_reward > 0 and prev_state_reward > 0 and action_weight == 0:   # Do nothing with a positive reward, action_weight = 0 is special meaning "do nothing".
-            #      reward = 0
-            #      actions[3] += 1
-            # else:
-            #     reward = 1 # np.abs(curr_state_reward - prev_state_reward) ** action_weight
-            #     actions[4] += 1
+            if toggle_sequence[0] == (args.side ** 2):
+                print('do nothing')
+                break
 
-            #print(env.get_state())
-            #print(e, reward, curr_state_reward, prev_state_reward, action_weight)
+            reward = 16 * 2 ** (-(isGood - 4)**2) - 9   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
+            #print(isGood, reward)
             learner.step(state, center, reward, n_state)
             curr_reward += reward
-            #print('REWARD=', reward)
-            #print(np.sum(n_state), np.sum(prev_state), '\n')
-            #input()
 
             # Get next state.
             state = n_state
-            env.update_state(n_world, state)     # Restore the enviornment with the actual next state.
+            env.update_state(n_world, env.get_stable())     # Restore the enviornment with the actual next state.
+            eps_counter += 1
         
+        cash_out = 0
+        # Cashout reward!
+        old = env.get_state()
+        env.step()
+        convergence_cycles = 0
+        while not env.match(old) and convergence_cycles < args.count_down:
+                old = env.get_state()
+                env.step()
+                convergence_cycles += 1
+
+        cash_out = 0
+        if eps_counter == args.max_eps_len or env.alive() == 0:
+            cash_out = -1000
+        elif eps_counter < args.max_eps_len:                                    # End state that has converged with high likleyhood still life.
+            cash_out = 1000
+            still_life_count += 1
+            still_life_avg += env.alive()
+        else:
+            ValueError('OMG!')
+
+        learner.step(state, center, cash_out, env.get_state(vector=True))
+
+        # if np.sum(env.get_state()) == 0:            # Grid zeros out!
+        #     cash_out = -np.abs(max_density * args.empty_min)
+        # elif convergence_cycles == args.count_down: # Grid never stabalizes, oscillator.
+        #     cash_out = -np.abs(max_density * args.empty_min)
+        # elif env.match(old):                                       # Convergence with still life.
+        #     cash_out = env.alive() * int(np.floor(np.log2(args.side ** 2))) * max_density
+        #     still_life_count += 1
+        #     still_life_avg += env.alive()
+        # else:
+        #     ValueError('OMG!')
+
         # Update epsilon and moving window reward.
-        moving_window.append(curr_reward / args.max_eps_len)
+        moving_window.append((curr_reward + cash_out) / (eps_counter + 1))
         epsilon *= epsilon_decay
         heat_map.update(env.get_state())
 
         # Optional print outs.
-        if e % args.max_eps_len == 0:
-            print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}\t{epsilon}')
+        if e % args.max_eps_len == 0 and e != 0:
+            print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}\t{epsilon}\t{still_life_count}\t{still_life_avg / (still_life_count + 1e-8)}')
+            still_life_count = 0
+            still_life_avg = 0
             #actions = np.zeros_like(actions)
             data_breakdown.append(heat_map.breakdown().T)
             data_evals.append(heat_map.evaluate())

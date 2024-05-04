@@ -27,15 +27,35 @@ def print_matrix(state, joinStr):
     for row in state:
         print(joinStr.join(map(str, row)))
 
-# Take action between single toggle or 2x2 block.
-def take_action(center, side):
-    size = side ** 2
-    block_toggle_threshold = size
-    single_toggle_threshold  = block_toggle_threshold * 2
+# Determine if a cell will be alive at specified location.
+def isAlive(center, side, state):
+        size = side ** 2
 
+        x = center % side
+        y = center - x
+        left = (x + side - 1) % side
+        right = (x + 1) % side
+        up = (y + size - side) % size
+        down = (y + side) % size
+
+        neighbors = \
+        state[left + up] + state[x + up] + state[right + up] + \
+        state[left + y] + state[right + y] + \
+        state[left + down] + state[x + down] + state[right + down]
+
+        # Update the state t+1 and stable values.
+        liveState = (neighbors == 3) # DON'T KYS, REMEMBER ACTIONS ARE TOGGLES! or (neighbors == 2 and state[center])
+        return 1 if (liveState and state[center] != 1) else 0   # Only have 1 if 3 live neighbors and DON'T KYS!
+
+
+# Take action and return neighbors per cell
+def take_action(center, side, state):
+    size = side ** 2
     action = []
-    action_weight = 0
-    if center < block_toggle_threshold:   # Place a 2x2 toggle block, anchored in upper left corner.
+    isGood = False
+
+    if center < size:   # Block toggle threshold.
+        size = side ** 2
         # Coordinate system with wrap around.
         x = center % side
         y = center - x
@@ -44,40 +64,98 @@ def take_action(center, side):
         up = (y + size - side) % size
         down = (y + side) % size
 
-        # Place the 2x2 block anchored in upper left corner.
         action.append(x + y)                # "Center" is top left anchor.
         action.append(right + y)            # Directly right from anchor.
         action.append(x + down)             # Directly underneath anchor.
         action.append(right + down)         # Directly diagnoal and down from anchor.
-        action_weight = 3
-    elif center < single_toggle_threshold:    # Toggle individual cell.
-         center -= block_toggle_threshold   # Shift center back down to actual indexes valid within state space.
-         action.append(center)
-         action_weight = 2
-        # Coordinate system with wrap around.
-        # x = center % side
-        # y = center - x
-        # left = (x + side - 1) % side
-        # right = (x + 1) % side
-        # up = (y + size - side) % size
-        # down = (y + side) % size
 
-        # options = [left + up, x + up, right + up,
-        #           left + y, x + y, right + y,
-        #           left + down, x + down, right + down]
-        
-        # # Random selection whether to place or not.
-
-        # while not action:
-        #     if:
-            
-        #     else:   # Pure Random.
-        #         for i in range(len(options)):
-        #             if np.random.rand() > 0.5:
-        #                 action.append(options[i])
-    
-    else:   # Do nothing threshold.
+        isGood = isAlive(action[0], side, state) + isAlive(action[1], side, state) + isAlive(action[2], side, state) + isAlive(action[3], side, state)
+    else:   # Do nothing.
         action.append(size)
-        action_weight = 0
+        isGood = 5
+    return (action, isGood)
 
-    return (action, action_weight)
+
+# Take action between single toggle or 2x2 block.
+# def take_action(center, side):
+#     size = side ** 2
+#     block_toggle_threshold = size
+#     single_toggle_threshold  = block_toggle_threshold * 2
+
+#     action = []
+#     action_weight = 0
+#     # if center < block_toggle_threshold:   # Place a 2x2 toggle block, anchored in upper left corner.
+#     #     # Coordinate system with wrap around.
+#     #     x = center % side
+#     #     y = center - x
+#     #     left = (x + side - 1) % side
+#     #     right = (x + 1) % side
+#     #     up = (y + size - side) % size
+#     #     down = (y + side) % size
+
+#     #     # Place the 2x2 block anchored in upper left corner.
+#     #     action.append(x + y)                # "Center" is top left anchor.
+#     #     action.append(right + y)            # Directly right from anchor.
+#     #     action.append(x + down)             # Directly underneath anchor.
+#     #     action.append(right + down)         # Directly diagnoal and down from anchor.
+#     #     action_weight = 3
+#     # elif center < single_toggle_threshold:    # Toggle individual cell.
+#     #      center -= block_toggle_threshold   # Shift center back down to actual indexes valid within state space.
+#     #      action.append(center)
+#     #      action_weight = 2
+#         # Coordinate system with wrap around.
+#         # x = center % side
+#         # y = center - x
+#         # left = (x + side - 1) % side
+#         # right = (x + 1) % side
+#         # up = (y + size - side) % size
+#         # down = (y + side) % size
+
+#         # options = [left + up, x + up, right + up,
+#         #           left + y, x + y, right + y,
+#         #           left + down, x + down, right + down]
+        
+#         # # Random selection whether to place or not.
+
+#         # while not action:
+#         #     if:
+            
+#         #     else:   # Pure Random.
+#         #         for i in range(len(options)):
+#         #             if np.random.rand() > 0.5:
+#         #                 action.append(options[i])
+    
+#     if center < block_toggle_threshold:
+#     #Coordinate system with wrap around.
+#         x = center % side
+#         y = center - x
+#         left = (x + side - 1) % side
+#         right = (x + 1) % side
+#         up = (y + size - side) % size
+#         down = (y + side) % size
+
+#         options = [left + up, x + up, right + up,
+#                     left + y, x + y, right + y,
+#                     left + down, x + down, right + down]
+        
+#         action.append(x + y)                # "Center" is top left anchor.
+#         action.append(right + y)            # Directly right from anchor.
+#         action.append(x + down)             # Directly underneath anchor.
+#         action.append(right + down)         # Directly diagnoal and down from anchor.
+
+#         # Random selection whether to place or not.
+#         # while not action:
+#         #     if np.random.rand() < 0.9:    # 2x2 Block.
+#         #         action.append(x + y)                # "Center" is top left anchor.
+#         #         action.append(right + y)            # Directly right from anchor.
+#         #         action.append(x + down)             # Directly underneath anchor.
+#         #         action.append(right + down)         # Directly diagnoal and down from anchor.
+#         #     else:                         # Pure Random.
+#         #         for i in range(len(options)):
+#         #             if np.random.rand() > 0.5:
+#         #                 action.append(options[i])
+#     else:   # Do nothing threshold.
+#         action.append(size)
+#         action_weight = 0
+
+#     return (action, action_weight)
