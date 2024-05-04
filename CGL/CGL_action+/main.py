@@ -151,14 +151,15 @@ if __name__ == "__main__":
             # Evaluate reward.
             #reward = int(-100 * (1 - (env.alive() / max_density)))  # 100 gives 3 integer places of precision.
 
-            density_reward = 7 * (-1 + (env.alive() / (max_density // 2)))  # 7 is chosen since that is the max reward from our function.
+            #density_reward = 7 * (-1 + (env.alive() / (max_density // 2)))  # 7 is chosen since that is the max reward from our function.
 
             # if toggle_sequence[0] == (args.side ** 2):
             #     print('do nothing')
             #     break
 
-            reward = (16 * 2 ** (-(isGood - 4)**2) - 9) + density_reward   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
+            #reward = (16 * 2 ** (-(isGood - 4)**2) - 9) + density_reward   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
             #print(isGood, reward)
+            reward = -1
             learner.step(old_viz, center, reward, NN_viz.get_state())
             #print(visual.get_viz().reshape(args.side, args.side))
             curr_reward += reward
@@ -178,12 +179,17 @@ if __name__ == "__main__":
                 env.step()
                 convergence_cycles += 1
 
+        PERCENT_DENSITY = 0.12
         if eps_counter == args.max_eps_len or env.alive() == 0:
             cash_out = -100
-        elif eps_counter < args.max_eps_len:                                    # End state that has converged with high likleyhood still life.
+        elif env.alive() % 4 == 0:
+            cash_out = -100
+        elif eps_counter < args.max_eps_len and (env.alive() / max_density) > PERCENT_DENSITY:                                    # End state that has converged with high likleyhood still life.
             cash_out = 100
             still_life_count += 1
             still_life_avg += env.alive()
+        elif (env.alive() / max_density) <= PERCENT_DENSITY:
+            cash_out = 0
         else:
             ValueError('OMG!')
 
