@@ -187,7 +187,7 @@ if __name__ == "__main__":
         else:
             ValueError('OMG!')
 
-        # learner.step(old_viz, center, cash_out, NN_viz.get_state())
+        learner.step(old_viz, center, cash_out, NN_viz.get_state())
 
         # if np.sum(env.get_state()) == 0:            # Grid zeros out!
         #     cash_out = -np.abs(max_density * args.empty_min)
