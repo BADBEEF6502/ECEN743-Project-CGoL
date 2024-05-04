@@ -1,5 +1,61 @@
 import numpy as np
+from collections import deque
 
+# Similar to heat map, but only stores last N states.
+class NN_state:
+    def __init__(self, side, max):
+        self.side = side
+        self.size = side ** 2
+        self.max = max
+        self.buff = deque(maxlen=max)
+
+        for _ in range(self.max):
+            self.buff.append(np.copy(np.zeros(self.size, dtype=np.uint8)))
+    
+    def clear(self):
+        self.buff.clear()
+        for _ in range(self.max):
+            self.buff.append(np.copy(np.zeros(self.size, dtype=np.uint8)))
+
+    def get_state(self):
+        result = np.array([])
+        for i in range(self.max):
+            result = np.append(result, self.buff[i])
+        return result
+    
+    def update(self, state):
+        self.buff.appendleft(np.copy(state))
+
+# Similar to heat map, but only stores last N states.
+class vizbuff:
+    def __init__(self, side, max):
+        self.side = side
+        self.size = side ** 2
+        self.max = max
+        self.counter = 0
+        self.buff = []
+        for i in range(self.max):
+            self.buff.append(np.zeros(self.size, dtype=np.uint8))
+    
+    def clear(self):
+        self.buff.clear()
+        for i in range(self.max):
+            self.buff.append(np.zeros(self.size, dtype=np.uint8))
+
+    def get_viz(self):
+        result = np.zeros(self.size, dtype=np.uint8)
+        for m in self.buff:
+            result += m
+        return result.flatten()
+    
+    def update(self, state):
+        if self.counter == self.max:
+            self.counter = 0
+
+        self.buff[self.counter] = np.copy(state)
+        self.counter += 1
+
+# Heat map used to check placement of life.
 class heatmap:
     def __init__(self, side):
         self.heat_map_matrix = np.zeros((side, side), dtype=np.uint32)
@@ -44,7 +100,7 @@ def isAlive(center, side, state):
         state[left + down] + state[x + down] + state[right + down]
 
         # Update the state t+1 and stable values.
-        liveState = (neighbors == 3) # DON'T KYS, REMEMBER ACTIONS ARE TOGGLES! or (neighbors == 2 and state[center])
+        liveState = (neighbors == 3) and (state[center] != 1) # DON'T KYS, REMEMBER ACTIONS ARE TOGGLES! or (neighbors == 2 and state[center])
         return 1 if (liveState and state[center] != 1) else 0   # Only have 1 if 3 live neighbors and DON'T KYS!
 
 

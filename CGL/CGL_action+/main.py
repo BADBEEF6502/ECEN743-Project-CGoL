@@ -43,9 +43,9 @@ if __name__ == "__main__":
     parser.add_argument("--reward-convergence", action='store_true', help='Only compute reward after convergence.')                             # Evaluate reward after convergence.
     parser.add_argument("--rand-name", action='store_true', help='Used for HPRC applications with same side seed.')                             # HPRC specific parameter.
     #exploration strategy
-    parser.add_argument("--epsilon-start", default=1, help='Start value of epsilon.')                                                           # start value of epsilon
-    parser.add_argument("--epsilon-end", default=0.01, help='End value of epsilon.')                                                            # end value of epsilon
-    parser.add_argument("--epsilon-decay", default=0.995, help='Decay value of epsilon.')                                                      # decay value of epsilon
+    parser.add_argument("--epsilon-start", default=1, type=float, help='Start value of epsilon.')                                                           # start value of epsilon
+    parser.add_argument("--epsilon-end", default=0.01, type=float, help='End value of epsilon.')                                                            # end value of epsilon
+    parser.add_argument("--epsilon-decay", default=0.995, type=float, help='Decay value of epsilon.')                                                      # decay value of epsilon
     args = parser.parse_args()
 
     env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable, runBlank=args.run_blank, empty=args.empty_state, empty_min=args.empty_min)
@@ -58,8 +58,9 @@ if __name__ == "__main__":
     # Print the starting state.
     helper.print_matrix(env.get_state(), ' ')
 
+    MAX_BUFF = 5
     kwargs = {
-        "state_dim":    env.get_state_dim(),
+        "state_dim":    env.get_state_dim() * MAX_BUFF,
         "action_dim":   action_space,
         "on_gpu":       args.exp_gpu,
         "discount":     args.discount,
@@ -101,8 +102,13 @@ if __name__ == "__main__":
     # curr_reward = np.zeros(args.max_eps_len, dtype=np.int32)
     still_life_count = 0
     still_life_avg = 0
+    NN_viz = helper.NN_state(args.side, MAX_BUFF)
+
+    #visual = helper.vizbuff(args.side, 5)
     for e in range(args.n_episodes):        # Run for some number of episodes.
         env.reset()                         # Reset the enviornment to what it started with originally.
+        NN_viz.clear()
+        #visual.clear()
         state = env.get_state(vector=True, shallow=False)
         
         center = 0
@@ -110,8 +116,12 @@ if __name__ == "__main__":
         eps_counter = 0
         # Episode duration.
         while env.alive() < int(max_density * 0.8) and eps_counter < args.max_eps_len:
+            #visual.update(state)
             # Have the action impact the state.
-            center = learner.select_action(state, epsilon) 
+            #old_vis = visual.get_viz()
+            NN_viz.update(state)
+            old_viz = NN_viz.get_state()
+            center = learner.select_action(old_viz, epsilon) 
             toggle_sequence, isGood = helper.take_action(center, args.side, state)
 
             env.toggle_state(toggle_sequence)    # Commit action.
@@ -119,7 +129,9 @@ if __name__ == "__main__":
 
             # Collect the reward and state and teach the DQN to learn.
             n_state = env.get_state(vector=True, shallow=False)         # What the agent will see, this can change between state and stable.
-            n_world = env.get_state(vector=True, shallow=False)         # This must ALWAYS be state!
+            NN_viz.update(n_state)
+            #n_world = env.get_state(vector=True, shallow=False)         # This must ALWAYS be state!
+            #visual.update(n_state)
 
             # Reward after congergence, must use stability matrix instead of state space!
             # Always use stable here, not state!
@@ -139,21 +151,21 @@ if __name__ == "__main__":
             # Evaluate reward.
             #reward = int(-100 * (1 - (env.alive() / max_density)))  # 100 gives 3 integer places of precision.
 
-            # (-1 + (env.alive() / (max_density // 2)))
+            density_reward = 7 * (-1 + (env.alive() / (max_density // 2)))  # 7 is chosen since that is the max reward from our function.
 
             # if toggle_sequence[0] == (args.side ** 2):
             #     print('do nothing')
             #     break
 
-            # reward = 16 * 2 ** (-(isGood - 4)**2) - 9   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
+            reward = (16 * 2 ** (-(isGood - 4)**2) - 9) + density_reward   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
             #print(isGood, reward)
-            reward = 0
-            learner.step(state, center, reward, n_state)
+            learner.step(old_viz, center, reward, NN_viz.get_state())
+            #print(visual.get_viz().reshape(args.side, args.side))
             curr_reward += reward
 
             # Get next state.
             state = n_state
-            env.update_state(n_world, env.get_stable())     # Restore the enviornment with the actual next state.
+            #env.update_state(n_world, env.get_stable())     # Restore the enviornment with the actual next state.
             eps_counter += 1
         
         cash_out = 0
@@ -166,33 +178,31 @@ if __name__ == "__main__":
                 env.step()
                 convergence_cycles += 1
 
-        # cash_out = 0
-        # if eps_counter == args.max_eps_len or env.alive() == 0:
-        #     cash_out = -1000
-        # elif eps_counter < args.max_eps_len:                                    # End state that has converged with high likleyhood still life.
-        #     cash_out = 1000
-        #     still_life_count += 1
-        #     still_life_avg += env.alive()
-        # else:
-        #     ValueError('OMG!')
-
-
-
-        if np.sum(env.get_state()) == 0:            # Grid zeros out!
-            cash_out = -np.abs(max_density * args.empty_min)
-        elif convergence_cycles == args.count_down: # Grid never stabalizes, oscillator.
-            cash_out = -np.abs(max_density * args.empty_min)
-        elif env.match(old):                                       # Convergence with still life.
-            cash_out = env.alive() * int(np.floor(np.log2(args.side ** 2))) * max_density
+        if eps_counter == args.max_eps_len or env.alive() == 0:
+            cash_out = -100
+        elif eps_counter < args.max_eps_len:                                    # End state that has converged with high likleyhood still life.
+            cash_out = 100
             still_life_count += 1
             still_life_avg += env.alive()
         else:
             ValueError('OMG!')
 
-        learner.step(state, center, cash_out, env.get_state(vector=True))
+        # learner.step(old_viz, center, cash_out, NN_viz.get_state())
+
+        # if np.sum(env.get_state()) == 0:            # Grid zeros out!
+        #     cash_out = -np.abs(max_density * args.empty_min)
+        # elif convergence_cycles == args.count_down: # Grid never stabalizes, oscillator.
+        #     cash_out = -np.abs(max_density * args.empty_min)
+        # elif env.match(old):                                       # Convergence with still life.
+        #     cash_out = env.alive() * int(np.floor(np.log2(args.side ** 2))) * max_density
+        #     still_life_count += 1
+        #     still_life_avg += env.alive()
+        # else:
+        #     ValueError('OMG!')
 
         # Update epsilon and moving window reward.
         moving_window.append((curr_reward + cash_out) / (eps_counter + 1))
+        #moving_window.append(curr_reward / eps_counter)
         epsilon *= epsilon_decay
         heat_map.update(env.get_state())
 

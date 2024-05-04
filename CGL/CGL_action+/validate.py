@@ -3,6 +3,7 @@ import dqn
 import torch
 import numpy as np
 import helper
+import torch
 
 # Print a pretty state matrix.
 def print_matrix(state, joinStr):
@@ -21,8 +22,8 @@ NET_MUL           = 2
 GPU_INDEX         = 0
 SIDE              = 10
 CONVERGENCE_LIMIT = 1000
-STATE_DIM         = SIDE ** 2
-ACTION_DIM        = STATE_DIM
+STATE_DIM         = (SIDE ** 2) * 5
+ACTION_DIM        = SIDE ** 2
 
 # Initalize neural network and enviornment.
 device = torch.device('cuda', index=GPU_INDEX) if torch.cuda.is_available() else torch.device('cpu')
@@ -30,7 +31,9 @@ Q = dqn.QNetwork(STATE_DIM, ACTION_DIM, NET_MUL).to(device)
 Q.load_state_dict(torch.load(f'Q_{SIDE}.pth'))
 Q.eval()
 
-env = CGL.sim(side=SIDE, seed=100, gpu=True, gpu_select=GPU_INDEX, spawnStabilityFactor=SPAWN_FACTOR, stableStabilityFactor=STABLE_FACTOR, runBlank=False, empty=EMPTY_MUL, empty_min=EMPTY_MIN)
+env = CGL.sim(side=SIDE, seed=100, gpu=True, gpu_select=GPU_INDEX, spawnStabilityFactor=SPAWN_FACTOR, stableStabilityFactor=STABLE_FACTOR, runBlank=True, empty=EMPTY_MUL, empty_min=EMPTY_MIN)
+
+viz = helper.NN_state(SIDE, 5)
 
 # Validation.
 print('*** VALIDATION ***')
@@ -41,8 +44,12 @@ for e in range(MAX_EPS_LEN):
     print('--- BEFORE ACTION ---')
     print_matrix(env.get_state(), ' ')
 
-    state = torch.from_numpy(state)
-    center = int(Q.forward(state).argmax())
+    state = torch.from_numpy(viz.get_state())
+    #center = int(Q.forward(state).argmax())
+
+    top_vals = 3
+    _, top_centers = torch.topk(Q.forward(state), k=top_vals)
+    center = int(top_centers[np.random.randint(top_vals)])
 
     toggle_sequence, action_weight = helper.take_action(center, SIDE, state)
     env.toggle_state(toggle_sequence)    # Commit action.
@@ -62,6 +69,7 @@ for e in range(MAX_EPS_LEN):
     # Process the action and get the next state (remember NN see's stability matrix).
     env.step() # Update the simulator's state.
     state = env.get_state(vector=True, shallow=False)
+    viz.update(state)
 
     print('--- AFTER STEP ---')
     print_matrix(env.get_state(), ' ')

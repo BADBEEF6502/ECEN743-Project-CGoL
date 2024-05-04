@@ -141,6 +141,23 @@ class DQNAgent():
         # Epsilon greedy exploration.
         s = torch.tensor(state, dtype=torch.int8) # Must convert numpy arrays to torch friendly tensors. Tho, these are read-only.
         a = int(self.Q.forward(s).argmax())
+        rand_select = np.random.random_sample()
+        if rand_select < epsilon:                       # Exploration choose single.
+            while a == int(self.Q.forward(s).argmax()):
+                a = np.random.randint(self.action_dim)
+        elif rand_select >= epsilon:                    # Eploitation choose top N.
+            top_vals = 3
+            top_values, top_indices = torch.topk(self.Q.forward(s), k=top_vals)
+            a = int(top_indices[np.random.randint(top_vals)])
+        else:
+            ValueError('OMG!')
+        return np.int32(a)                        # Action is the index the agent want's to toggle from dead to alive or visa versa. Torch cannot handle uint32!
+
+    # Have the DQN agent select an action.
+    def select_action_old(self, state, epsilon):
+        # Epsilon greedy exploration.
+        s = torch.tensor(state, dtype=torch.int8) # Must convert numpy arrays to torch friendly tensors. Tho, these are read-only.
+        a = int(self.Q.forward(s).argmax())
         if np.random.random_sample() < epsilon:
             while a == int(self.Q.forward(s).argmax()):
                 a = np.random.randint(self.action_dim)
