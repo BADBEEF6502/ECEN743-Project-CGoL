@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import helper
 import torch
+import sys
 
 # Print a pretty state matrix.
 def print_matrix(state, joinStr):
@@ -21,16 +22,17 @@ EMPTY_MIN         = -10
 MAX_EPS_LEN       = 2000
 NET_MUL           = 2
 GPU_INDEX         = 0
-SIDE              = 10
-CONVERGENCE_LIMIT = 2000
+SIDE              = int(sys.argv[1])
 BUFF_MAX          = 2
+CONVERGENCE_LIMIT = 2000
 STATE_DIM         = (SIDE ** 2) * BUFF_MAX
 ACTION_DIM        = SIDE ** 2
+NAME              = float(sys.argv[2])
 
 # Initalize neural network and enviornment.
 device = torch.device('cuda', index=GPU_INDEX) if torch.cuda.is_available() else torch.device('cpu')
 Q = dqn.QNetwork(STATE_DIM, ACTION_DIM, NET_MUL).to(device)
-Q.load_state_dict(torch.load(f'Q_{SIDE}.pth'))
+Q.load_state_dict(torch.load(f'Q_{SIDE}_{NAME}.pth'))
 Q.eval()
 
 env = CGL.sim(side=SIDE, seed=100, gpu=True, gpu_select=GPU_INDEX, spawnStabilityFactor=SPAWN_FACTOR, stableStabilityFactor=STABLE_FACTOR, runBlank=True, empty=EMPTY_MUL, empty_min=EMPTY_MIN)
@@ -43,7 +45,7 @@ tot_actions = np.zeros(SIDE **2, dtype=np.uint32)
 print('*** VALIDATION ***')
 
 
-MAX_TRIALS = 1000
+MAX_TRIALS = 100
 life_counts = 0
 place_final_no_overlap = 0
 tot_place_final_no_overlap = 0
@@ -63,9 +65,9 @@ for i in range(MAX_TRIALS):
     place_final_no_overlap = 0
     for e in range(MAX_EPS_LEN):
 
-        # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', e)
-        # print('--- BEFORE ACTION ---')
-        # print_matrix(env.get_state(), ' ')
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', e)
+        print('--- BEFORE ACTION ---')
+        print_matrix(env.get_state(), ' ')
 
         state = torch.from_numpy(viz.get_state())
         #center = int(Q.forward(state).argmax())
@@ -74,8 +76,8 @@ for i in range(MAX_TRIALS):
         _, top_centers = torch.topk(Q.forward(state), k=top_vals)
         
         # THIS CHOOSES THE ACTIONS, EITHER RANDOM OR LEARNED FROM OUR MODEL!
-        #center = int(top_centers[np.random.randint(top_vals)])
-        center = np.random.randint(0, SIDE ** 2)
+        center = int(top_centers[np.random.randint(top_vals)])
+        #center = np.random.randint(0, SIDE ** 2)
 
         actions[center] += 1
 
@@ -91,17 +93,17 @@ for i in range(MAX_TRIALS):
         else:
             action_taken = f'BLOCK AT {center}'
         
-        # print('Action taken:', action_taken)
-        # print('--- AFTER ACTION ---')
-        # print_matrix(env.get_state(), ' ')
+        print('Action taken:', action_taken)
+        print('--- AFTER ACTION ---')
+        print_matrix(env.get_state(), ' ')
 
         # Process the action and get the next state (remember NN see's stability matrix).
         env.step() # Update the simulator's state.
         state = env.get_state(vector=True, shallow=False)
         viz.update(state)
 
-        # print('--- AFTER STEP ---')
-        # print_matrix(env.get_state(), ' ')
+        print('--- AFTER STEP ---')
+        print_matrix(env.get_state(), ' ')
 
     # Validation math.
     for indx in toggle_sequence:
@@ -115,32 +117,32 @@ for i in range(MAX_TRIALS):
     tot_perfect[place_final_no_overlap] += 1
 
     # Validation convergence.
-    # print('--- LAST STATE SAW ---')
+    print('--- LAST STATE SAW ---')
 
-    # print_matrix(last_state_saw.reshape(SIDE, SIDE), ' ')
-    # print('--- CONVERGENCE ---')
-    # old = env.get_state()
-    # env.step()
-    # count_down = CONVERGENCE_LIMIT
-    # while not env.match(old) and count_down:
-    #         old = env.get_state()
-    #         env.step()
-    #         count_down -= 1
-    # print_matrix(env.get_state(), ' ')
+    print_matrix(last_state_saw.reshape(SIDE, SIDE), ' ')
+    print('--- CONVERGENCE ---')
+    old = env.get_state()
+    env.step()
+    count_down = CONVERGENCE_LIMIT
+    while not env.match(old) and count_down:
+            old = env.get_state()
+            env.step()
+            count_down -= 1
+    print_matrix(env.get_state(), ' ')
 
     if env.alive() != 0:
         life_counts += 1
 
-    # top = ''
-    # bot = ''
-    # for a in range(len(actions)):
-    #     if actions[a] != 0:
-    #         top += ' ' + str(a).zfill(4)
-    #         bot += ' ' + str(actions[a]).zfill(4)
+    top = ''
+    bot = ''
+    for a in range(len(actions)):
+        if actions[a] != 0:
+            top += ' ' + str(a).zfill(4)
+            bot += ' ' + str(actions[a]).zfill(4)
 
-    # print(f'{i} - Final Life:{env.alive()} - Placed Overlapping: {place_final_overlap} - Place Non-Overlapping: {place_final_no_overlap}')
-    # print(top)
-    # print(bot)
+    print(f'{i} - Final Life:{env.alive()} - Placed Overlapping: {place_final_overlap} - Place Non-Overlapping: {place_final_no_overlap}')
+    print(top)
+    print(bot)
 
     tot_actions += actions
 
@@ -160,4 +162,5 @@ for a in range(len(actions)):
 actions_sorted = dict(sorted(actions_dict.items(), key=lambda item: item[1]))
 for key, value in zip(actions_sorted.keys(), actions_sorted.values()):
     print(f"{key} {value}")
-    #print(Q.state_dict())
+
+print(Q.state_dict())

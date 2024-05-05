@@ -145,12 +145,10 @@ class DQNAgent():
         if rand_select < epsilon:                       # Exploration choose single.
             while a == int(self.Q.forward(s).argmax()):
                 a = np.random.randint(self.action_dim)
-        elif rand_select >= epsilon:                    # Eploitation choose top N.
+        else:# rand_select >= epsilon:                  # Eploitation choose top N.
             top_vals = 3
             top_values, top_indices = torch.topk(self.Q.forward(s), k=top_vals)
             a = int(top_indices[np.random.randint(top_vals)])
-        else:
-            ValueError('OMG!')
         return np.int32(a)                        # Action is the index the agent want's to toggle from dead to alive or visa versa. Torch cannot handle uint32!
 
     # Have the DQN agent select an action.

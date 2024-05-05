@@ -19,16 +19,16 @@ if __name__ == "__main__":
 
     parser.add_argument("--side", default=10, type=int, help='Side length of sim enviornment.')                                                 # Side length of the simulator env.
     parser.add_argument("--seed", default=0, type=int, help='Seeds for randomness.')                                                            # Randomness seeds.
-    parser.add_argument("--n-episodes", default=2000, type=int, help='Maximum number of training episodes.')                                    # maximum number of training episodes
-    parser.add_argument("--batch-size", default=64, type=int, help='Training batch size.')                                                      # training batch size
+    parser.add_argument("--n-episodes", default=8000, type=int, help='Maximum number of training episodes.')                                    # maximum number of training episodes
+    parser.add_argument("--batch-size", default=1024, type=int, help='Training batch size.')                                                      # training batch size
     parser.add_argument("--discount", default=0.99, type=float, help='Discount factor.')                                                        # discount factor
     parser.add_argument("--lr", default=0.001, type=float, help='Learning rate.')                                                               # learning rate
     parser.add_argument("--tau", default=0.001, help='Tau is softness parameter for updating the target network.')                              # soft update of target network
-    parser.add_argument("--exp-size", default=1000,type=int, help='Experience replay buffer length')                                            # experience replay buffer length
+    parser.add_argument("--exp-size", default=5000,type=int, help='Experience replay buffer length')                                            # experience replay buffer length
     parser.add_argument("--exp-gpu", action='store_true', help='Put experience replay buffer on GPU for speed, defaults to main memory/CPU.')   # experience replay buffer length
     parser.add_argument("--update-freq", default=4, type=int, help='Update frequency of target network.')                                       # update frequency of target network
     parser.add_argument("--gpu-index", default=0, type=int, help='GPU device to select for neural network and CGL enviornment.')                # GPU index
-    parser.add_argument("--max-eps-len", default=1000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
+    parser.add_argument("--max-eps-len", default=4000, type=int, help='Maximum length of each episode.')                                        # maximum time of an episode
     parser.add_argument("--net-mul", default=2, type=float, help='Multiplier for hidden layers in neural network.')                             # Multiplier for hidden values in neural network.
     parser.add_argument("--empty-state", default=0, type=int, help='Used to scale reward regarding empty cells.')                               # Used to scalue up or down the impact of empty cells on reward.
     parser.add_argument("--empty-min", default=-128, type=int, help='Used as floor value for empty cells.')                                     # Used to scalue up or down the impact of empty cells on reward.
@@ -41,11 +41,12 @@ if __name__ == "__main__":
 #    parser.add_argument("--eval-period", default=10, type=int, help='Used to control evaluation period for data collection.')                  # Modifier for reward function.
     parser.add_argument("--count-down", default=10000, type=int, help='Used as a maximum limit to wait for the system to stabalize.')           # Used for heatmap evaluation and still life performance generation.
     parser.add_argument("--reward-convergence", action='store_true', help='Only compute reward after convergence.')                             # Evaluate reward after convergence.
-    parser.add_argument("--rand-name", action='store_true', help='Used for HPRC applications with same side seed.')                             # HPRC specific parameter.
+#    parser.add_argument("--name", help='Used for HPRC applications with same side seed.')                                                       # HPRC specific parameter.
+    parser.add_argument("--max-buf", default=2, type=int, help='Number of states for the NN to remember.')                                      # Done in an effort to reduce cycling.
     #exploration strategy
     parser.add_argument("--epsilon-start", default=1, type=float, help='Start value of epsilon.')                                                           # start value of epsilon
     parser.add_argument("--epsilon-end", default=0.01, type=float, help='End value of epsilon.')                                                            # end value of epsilon
-    parser.add_argument("--epsilon-decay", default=0.995, type=float, help='Decay value of epsilon.')                                                      # decay value of epsilon
+    parser.add_argument("--epsilon-decay", default=0.999, type=float, help='Decay value of epsilon.')                                                      # decay value of epsilon
     args = parser.parse_args()
 
     env = CGL.sim(side=args.side, seed=args.seed, gpu=(not args.cpu), gpu_select=args.gpu_index, spawnStabilityFactor=args.spawn, stableStabilityFactor=args.stable, runBlank=args.run_blank, empty=args.empty_state, empty_min=args.empty_min)
@@ -109,9 +110,9 @@ if __name__ == "__main__":
 
     #visual = helper.vizbuff(args.side, 5)
     for e in range(args.n_episodes):        # Run for some number of episodes.
-        #env.fresh(np.random.randint(0, 999999999))                         # Reset the enviornment to what it started with originally.
+        env.fresh(np.random.randint(0, 999999999))                         # Reset the enviornment to what it started with originally.
         #print(env.get_state())
-        env.reset()
+        #env.reset()
         NN_viz.clear()
         #visual.clear()
         state = env.get_state(vector=True, shallow=False)
@@ -160,13 +161,13 @@ if __name__ == "__main__":
             # Evaluate reward.
             #reward = int(-100 * (1 - (env.alive() / max_density)))  # 100 gives 3 integer places of precision.
 
-            density_reward = 7 * (-1 + (env.alive() / (max_density // 2)))  # 7 is chosen since that is the max reward from our function.
+            #density_reward = 7 * (-1 + (env.alive() / (max_density // 2)))  # 7 is chosen since that is the max reward from our function.
 
             # if toggle_sequence[0] == (args.side ** 2):
             #     print('do nothing')
             #     break
 
-            reward = (16 * 2 ** (-(isGood - 4)**2) - 9) + density_reward   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
+            reward = (16 * 2 ** (-(isGood - 4)**2) - 9)# + density_reward   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
             #print(isGood, reward)
             #reward = -1
             learner.step(old_viz, center, reward, NN_viz.get_state())
@@ -273,11 +274,7 @@ if __name__ == "__main__":
     data_actions.append(actions)
 
     # Save the data files.
-    name = ''
-    if args.rand_name: # Random name generation for HRPC applications with same side length.
-        name = f'{args.side}_{uuid.uuid4()}'
-    else:
-        name = f'{args.side}'
+    name = f'{args.side}_{args.discount}'
     learner.save(name)  # Save the final state of the learner.
     data2save = {'breakdown' : data_breakdown, 'evals' : data_evals, 'rewards' : data_rewards, 'data_heatmaps' : data_heatmaps, 'data_actions' : data_actions, 'eval_period' : args.max_eps_len}
     with open(f'data_{name}.pkl', 'wb') as f:
