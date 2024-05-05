@@ -58,7 +58,7 @@ if __name__ == "__main__":
     # Print the starting state.
     helper.print_matrix(env.get_state(), ' ')
 
-    MAX_BUFF = 5
+    MAX_BUFF = 2
     kwargs = {
         "state_dim":    env.get_state_dim() * MAX_BUFF,
         "action_dim":   action_space,
@@ -93,6 +93,7 @@ if __name__ == "__main__":
     data_evals     = []
     data_rewards   = []
     data_heatmaps  = []
+    data_actions   = []
 
     # Main program loop.
     print(f'Max density of side {args.side} is {max_density}.')
@@ -104,9 +105,13 @@ if __name__ == "__main__":
     still_life_avg = 0
     NN_viz = helper.NN_state(args.side, MAX_BUFF)
 
+    actions = np.zeros(args.side ** 2, dtype=np.uint32)
+
     #visual = helper.vizbuff(args.side, 5)
     for e in range(args.n_episodes):        # Run for some number of episodes.
-        env.reset()                         # Reset the enviornment to what it started with originally.
+        #env.fresh(np.random.randint(0, 999999999))                         # Reset the enviornment to what it started with originally.
+        #print(env.get_state())
+        env.reset()
         NN_viz.clear()
         #visual.clear()
         state = env.get_state(vector=True, shallow=False)
@@ -114,8 +119,10 @@ if __name__ == "__main__":
         center = 0
         curr_reward = 0
         eps_counter = 0
+
         # Episode duration.
-        while env.alive() < int(max_density * 0.8) and eps_counter < args.max_eps_len:
+        #while env.alive() < int(max_density * 0.8) and eps_counter < args.max_eps_len:
+        while eps_counter < args.max_eps_len:
             #visual.update(state)
             # Have the action impact the state.
             #old_vis = visual.get_viz()
@@ -123,6 +130,8 @@ if __name__ == "__main__":
             old_viz = NN_viz.get_state()
             center = learner.select_action(old_viz, epsilon) 
             toggle_sequence, isGood = helper.take_action(center, args.side, state)
+
+            actions[center] += 1
 
             env.toggle_state(toggle_sequence)    # Commit action.
             env.step()                           # Update the simulator's state.
@@ -151,15 +160,15 @@ if __name__ == "__main__":
             # Evaluate reward.
             #reward = int(-100 * (1 - (env.alive() / max_density)))  # 100 gives 3 integer places of precision.
 
-            #density_reward = 7 * (-1 + (env.alive() / (max_density // 2)))  # 7 is chosen since that is the max reward from our function.
+            density_reward = 7 * (-1 + (env.alive() / (max_density // 2)))  # 7 is chosen since that is the max reward from our function.
 
             # if toggle_sequence[0] == (args.side ** 2):
             #     print('do nothing')
             #     break
 
-            #reward = (16 * 2 ** (-(isGood - 4)**2) - 9) + density_reward   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
+            reward = (16 * 2 ** (-(isGood - 4)**2) - 9) + density_reward   # x = 4 is 7, x = 3 is -1, x = 2 is -8, x = 1 and x = 0 is -10.
             #print(isGood, reward)
-            reward = -1
+            #reward = -1
             learner.step(old_viz, center, reward, NN_viz.get_state())
             #print(visual.get_viz().reshape(args.side, args.side))
             curr_reward += reward
@@ -168,7 +177,7 @@ if __name__ == "__main__":
             state = n_state
             #env.update_state(n_world, env.get_stable())     # Restore the enviornment with the actual next state.
             eps_counter += 1
-        
+
         cash_out = 0
         # Cashout reward!
         old = env.get_state()
@@ -179,20 +188,31 @@ if __name__ == "__main__":
                 env.step()
                 convergence_cycles += 1
 
-        PERCENT_DENSITY = 0.12
-        if eps_counter == args.max_eps_len or env.alive() == 0:
+        if env.alive() == 0:
             cash_out = -100
-        elif env.alive() % 4 == 0:
-            cash_out = -100
-        elif eps_counter < args.max_eps_len and (env.alive() / max_density) > PERCENT_DENSITY:                                    # End state that has converged with high likleyhood still life.
-            cash_out = 100
+        elif env.alive() > 0 and env.match(old):
             still_life_count += 1
             still_life_avg += env.alive()
-        elif (env.alive() / max_density) <= PERCENT_DENSITY:
-            cash_out = 0
+            cash_out = 100
         else:
-            ValueError('OMG!')
+            cash_out = 0
 
+        # PERCENT_DENSITY = 0.12
+        # if eps_counter == args.max_eps_len or env.alive() == 0:
+        #     cash_out = -100
+        # elif env.alive() % 4 == 0:
+        #     cash_out = -100
+        # elif eps_counter < args.max_eps_len and (env.alive() / max_density) > PERCENT_DENSITY:                                    # End state that has converged with high likleyhood still life.
+        #     cash_out = 100
+        #     still_life_count += 1
+        #     still_life_avg += env.alive()
+        # elif (env.alive() / max_density) <= PERCENT_DENSITY:
+        #     cash_out = 0
+        # else:
+        #     ValueError('OMG!')
+
+        old_viz = NN_viz.get_state()    # Get the last thing the NN saw.
+        NN_viz.update(env.get_state())  # Get the last thing after convergence.
         learner.step(old_viz, center, cash_out, NN_viz.get_state())
 
         # if np.sum(env.get_state()) == 0:            # Grid zeros out!
@@ -215,20 +235,33 @@ if __name__ == "__main__":
         # Optional print outs.
         if e % args.max_eps_len == 0 and e != 0:
             print(f'{e}\t{np.mean(moving_window)}\t{time.process_time() - start}\t{epsilon}\t{still_life_count}\t{still_life_avg / (still_life_count + 1e-8)}')
-            still_life_count = 0
-            still_life_avg = 0
-            #actions = np.zeros_like(actions)
+
+            top = ''
+            bot = ''
+            for i in range(len(actions)):
+                 if actions[i] != 0:
+                    top += ' ' + str(i).zfill(4)
+                    bot += ' ' + str(actions[i]).zfill(4)
+
+            print(top)
+            print(bot)
+
             data_breakdown.append(heat_map.breakdown().T)
             data_evals.append(heat_map.evaluate())
             data_rewards.append(np.mean(moving_window))
             data_heatmaps.append(heat_map.get_heatmap())
+            data_actions.append(actions)
 
             if args.verbose:
                 helper.print_matrix(heat_map.get_heatmap(), ' ')
                 print(heat_map.evaluate())
                 helper.print_matrix(heat_map.breakdown(), '\t')
             heat_map.clear()
-
+        
+            # Reset vars.
+            still_life_count = 0
+            still_life_avg = 0
+            actions = np.zeros_like(actions)
             start = time.process_time()         # Start the timer again for new episode.
 
     # Episodes done, final prints for training and final save data.
@@ -237,6 +270,7 @@ if __name__ == "__main__":
     data_evals.append(heat_map.evaluate())
     data_rewards.append(np.mean(moving_window))
     data_heatmaps.append(heat_map.get_heatmap())
+    data_actions.append(actions)
 
     # Save the data files.
     name = ''
@@ -245,7 +279,7 @@ if __name__ == "__main__":
     else:
         name = f'{args.side}'
     learner.save(name)  # Save the final state of the learner.
-    data2save = {'breakdown' : data_breakdown, 'evals' : data_evals, 'rewards' : data_rewards, 'data_heatmaps' : data_heatmaps, 'eval_period' : args.max_eps_len}
+    data2save = {'breakdown' : data_breakdown, 'evals' : data_evals, 'rewards' : data_rewards, 'data_heatmaps' : data_heatmaps, 'data_actions' : data_actions, 'eval_period' : args.max_eps_len}
     with open(f'data_{name}.pkl', 'wb') as f:
         pickle.dump(data2save, f)
 

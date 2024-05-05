@@ -278,6 +278,14 @@ class sim:
         self.world = np.copy(self.initState)
         self.stable = np.copy(self.initStable)
 
+    # Like reset, but for random seeds.
+    def fresh(self, seed=0):
+        np.random.seed(seed)
+        self.world = np.random.randint(2, size=self.size, dtype=np.uint8)
+        self.stable = np.zeros(self.size, dtype=np.int8)                          # Used to store stable values for each cell, NOTE: IS SIGNED!
+        self.stable[self.world != 0] = self.spawnStabilityFactor                  # Every cell starts at the spawnStabilityFactor.
+        self.stable[self.stable == 0] = self.empty                                # Stability has negative for empty space.
+
     # This will compare some input world state with the current state and return true if they match.
     def match(self, terminalState):
         return (self.world==terminalState.flatten()).all()
